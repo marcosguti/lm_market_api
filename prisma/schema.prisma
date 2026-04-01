@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserType {
+  superAdmin
+  admin
+  client
+  deliveryDriver
+}
+
+model User {
+  id        String   @id @default(uuid())
+  address   String?
+  createdAt DateTime @default(now())
+  email     String   @unique
+  firstName String
+  lastName  String
+  numberId  String   @unique
+  password  String
+  phone     String?
+  type      UserType
+  updatedAt DateTime @updatedAt
+
+  linkedDevices       LinkedDevice[]
+  passwordResetTokens PasswordResetToken[]
+  tokens              Token[]
+}
+
+model Product {
+  id               String   @id @default(uuid())
+  code             String   @unique
+  cost             Decimal  @db.Decimal(12, 2)
+  createdAt        DateTime @default(now())
+  department       String
+  description      String?
+  imageUrl         String?
+  brand            String
+  name             String
+  price            Decimal  @db.Decimal(12, 2)
+  updatedAt        DateTime @updatedAt
+  initialBalance   Int?
+  adminMovements   Int?
+  salesToday       Int?
+  totalStock       Int?
+  inventoryValueBs Decimal? @db.Decimal(14, 2)
+  marginPct        Decimal? @db.Decimal(10, 2)
+
+  @@index([name, brand, code])
+  @@index([description])
+  @@index([brand])
+}
+
+model Token {
+  id             String   @id @default(uuid())
+  createdAt      DateTime
+  expirationDate DateTime
+  userId         String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model DateBaseVersion {
+  id             String   @id @default(uuid())
+  currentVersion Int
+  updatedAt      DateTime
+}
+
+model LinkedDevice {
+  id               String   @id @default(uuid())
+  createdAt        DateTime
+  deviceId         String
+  refreshTokenHash String
+  userId           String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceId])
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  expiresAt DateTime
+  token     String   @unique
+  userId    String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([token])
+}
