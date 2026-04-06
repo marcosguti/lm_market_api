@@ -44,8 +44,7 @@ export function buildExternalProductsRequest(
   url.searchParams.set('pageSize', String(pageSize));
   const headers: Record<string, string> = { Accept: 'application/json' };
   const apiKey = process.env.EXTERNAL_PRODUCTS_API_KEY?.trim();
-  const apiKeyHeader = process.env.EXTERNAL_PRODUCTS_API_KEY_HEADER?.trim() || 'X-Api-Key';
-  if (apiKey) headers[apiKeyHeader] = apiKey;
+  if (apiKey) headers['X-Api-Key'] = apiKey;
   return { headers, url: url.toString() };
 }
 
@@ -76,7 +75,7 @@ export async function syncExternalProducts(): Promise<{
 
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 180_000);
-    // eslint-disable-next-line n/no-unsupported-features/node-builtins -- Node 20 global fetch
+
     const res = await fetch(url, {
       headers,
       signal: controller.signal,

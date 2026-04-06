@@ -9,6 +9,7 @@ const getProductsQuerySchema = Joi.object({
   page: Joi.number().integer().min(1).default(1),
   pageSize: Joi.number().integer().min(1).max(200).default(50),
   search: Joi.string().allow('').optional(),
+  sort: Joi.string().valid('priceAsc', 'priceDesc').allow(null, '').optional().empty([null, '']),
 });
 
 export async function getProducts(req: Request, res: Response): Promise<void> {
@@ -19,12 +20,13 @@ export async function getProducts(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: validation.error.message });
     return;
   }
-  const { page, pageSize, search } = validation.value;
+  const { page, pageSize, search, sort } = validation.value;
 
   const result = await findProductsPaginated({
     page,
     pageSize,
     search: search || undefined,
+    sort,
   });
 
   res.json({
