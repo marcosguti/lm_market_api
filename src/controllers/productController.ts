@@ -31,28 +31,20 @@ export async function getProducts(req: Request, res: Response): Promise<void> {
 
   res.json({
     ...result,
-    data: result.data.map(serializeProduct),
+    data: result.data.map(serializePublicProduct),
   });
 }
 
-function serializeProduct(p: Product) {
+/** Catálogo público: sin costo, margen ni datos internos de inventario. */
+function serializePublicProduct(p: Product) {
   return {
-    adminMovements: p.adminMovements,
     brand: p.brand,
     code: p.code,
-    cost: Number(p.cost.toString()),
     createdAt: p.createdAt,
     department: p.department,
     description: p.description,
     id: p.id,
     imageUrl: p.imageUrl,
-    initialBalance: p.initialBalance,
-    inventoryValueBs:
-      p.inventoryValueBs === null || p.inventoryValueBs === undefined
-        ? null
-        : Number(p.inventoryValueBs.toString()),
-    marginPct:
-      p.marginPct === null || p.marginPct === undefined ? null : Number(p.marginPct.toString()),
     name: p.name,
     price: Number(p.price.toString()),
     salesToday: p.salesToday,

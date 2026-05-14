@@ -2,7 +2,7 @@ import '../loadEnv.js';
 import { buildExternalProductsRequest } from '../services/syncExternalProducts.js';
 
 const page = Number(process.env.VERIFY_PAGE ?? '1');
-const pageSizeVerify = Number(process.env.VERIFY_PAGE_SIZE ?? '1000');
+const pageSizeVerify = 100;
 
 async function main(): Promise<void> {
   const { headers, url } = buildExternalProductsRequest(page, pageSizeVerify);
@@ -13,7 +13,7 @@ async function main(): Promise<void> {
   console.log('Auth header name:', authHeader ?? '(none)');
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 60_000);
-  // eslint-disable-next-line n/no-unsupported-features/node-builtins -- Node 20 global fetch
+
   const res = await fetch(url, { headers, signal: controller.signal });
   clearTimeout(timeoutId);
   // eslint-disable-next-line no-console -- CLI output

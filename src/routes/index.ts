@@ -1,9 +1,21 @@
 import type { Express } from 'express';
 
+import adminOrderRoutes from './adminOrders.js';
+import adminProductRoutes from './adminProducts.js';
+import adminUserRoutes from './adminUsers.js';
 import authRoutes from './auth.js';
+import deliveryOrderRoutes from './deliveryOrders.js';
+import notificationRoutes from './notifications.js';
+import orderRoutes from './orders.js';
 import productRoutes from './products.js';
 
 export default function setRoutes(app: Express): void {
+  app.use('/api/admin/orders', adminOrderRoutes);
+  app.use('/api/admin/products', adminProductRoutes);
+  app.use('/api/admin/users', adminUserRoutes);
   app.use('/api/auth', authRoutes);
+  app.use('/api/delivery/orders', deliveryOrderRoutes);
+  app.use('/api/notifications', notificationRoutes);
+  app.use('/api/orders', orderRoutes);
   app.use('/api/products', productRoutes);
 }

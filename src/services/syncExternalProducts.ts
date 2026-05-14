@@ -3,7 +3,8 @@ import { randomUUID } from 'crypto';
 
 import prisma from '../prisma.js';
 
-const SYNC_FETCH_PAGE_SIZE = 1000;
+/** Máximo admitido por el API de productos externos */
+const SYNC_FETCH_PAGE_SIZE = 100;
 
 export interface ExternalProductRow {
   codigoInterno: string;
@@ -91,12 +92,21 @@ export async function syncExternalProducts(): Promise<{
     const te = Number(body.totalElements);
     if (Number.isFinite(te) && te >= 0) totalElements = te;
     const declaredPages = Number(body.totalPages);
-    if (Number.isFinite(declaredPages) && declaredPages >= 1) {
+
+    if (page === 1) {
+      totalPages = resolveSyncTotalPages(
+        totalElements,
+        declaredPages,
+        rows.length,
+        SYNC_FETCH_PAGE_SIZE,
+      );
+      const declaredFinite = Number.isFinite(declaredPages) && declaredPages >= 1;
+      // eslint-disable-next-line no-console -- sync diagnostics
+      console.log(
+        `[product-sync] resolved totalPages=${totalPages} (API declared=${declaredFinite ? declaredPages : 'n/a'}, totalElements=${totalElements}, firstPageRows=${rows.length}, requestedPageSize=${SYNC_FETCH_PAGE_SIZE})`,
+      );
+    } else if (totalElements <= 0 && Number.isFinite(declaredPages) && declaredPages >= 1) {
       totalPages = declaredPages;
-    } else if (totalElements > 0) {
-      totalPages = Math.max(1, Math.ceil(totalElements / SYNC_FETCH_PAGE_SIZE));
-    } else {
-      totalPages = Math.max(1, page);
     }
 
     lastProcessedPage = page;
@@ -119,19 +129,26 @@ export async function syncExternalProducts(): Promise<{
   }
 
   const sourceCodesList = Array.from(sourceCodes);
-  const { count: deleted } =
+
+  const deactivateWhere: Prisma.ProductWhereInput =
     sourceCodesList.length > 0
-      ? await prisma.product.deleteMany({
-          where: {
-            code: {
-              notIn: sourceCodesList,
-            },
-          },
-        })
-      : await prisma.product.deleteMany();
+      ? {
+          active: true,
+          code: { notIn: sourceCodesList },
+          OR: [{ imageUrl: null }, { imageUrl: '' }],
+        }
+      : {
+          active: true,
+          OR: [{ imageUrl: null }, { imageUrl: '' }],
+        };
+
+  const { count: deactivated } = await prisma.product.updateMany({
+    data: { active: false },
+    where: deactivateWhere,
+  });
 
   return {
-    deleted,
+    deleted: deactivated,
     lastPage: lastProcessedPage,
     skippedWithoutCode,
     sourceDistinctCodes: sourceCodes.size,
@@ -175,6 +192,7 @@ function mapRowToUpsertArgs(row: ExternalProductRow): {
 
   return {
     create: {
+      active: true,
       id: randomUUID(),
       ...baseData,
     },
@@ -195,4 +213,43 @@ function mapRowToUpsertArgs(row: ExternalProductRow): {
     },
     where: { code },
   };
+}
+
+/**
+ * El API externo a veces ignora `pageSize` grande y sigue paginando de a ~10 ítems (totalPages=624).
+ * Otras veces sí respeta nuestro pageSize pero devuelve totalPages demasiado bajo (p. ej. 2).
+ * Decidimos cuántas peticiones hacer según el tamaño real del primer lote.
+ */
+function resolveSyncTotalPages(
+  totalElements: number,
+  declaredPages: number,
+  firstPageRowCount: number,
+  requestedPageSize: number,
+): number {
+  const declaredFinite = Number.isFinite(declaredPages) && declaredPages >= 1;
+
+  if (totalElements <= 0) {
+    return declaredFinite ? declaredPages : 1;
+  }
+
+  const pagesAtRequestedSize = Math.max(1, Math.ceil(totalElements / requestedPageSize));
+
+  if (firstPageRowCount >= totalElements) {
+    return 1;
+  }
+
+  const firstChunkMatchesRequestedSize = firstPageRowCount >= requestedPageSize;
+
+  if (firstChunkMatchesRequestedSize) {
+    return pagesAtRequestedSize;
+  }
+
+  if (declaredFinite && declaredPages > pagesAtRequestedSize) {
+    return declaredPages;
+  }
+
+  const inferred =
+    firstPageRowCount > 0 ? Math.ceil(totalElements / firstPageRowCount) : pagesAtRequestedSize;
+
+  return Math.max(pagesAtRequestedSize, declaredFinite ? declaredPages : 0, inferred);
 }
