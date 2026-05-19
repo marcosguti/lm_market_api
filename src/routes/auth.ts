@@ -9,7 +9,7 @@ import {
   requestPasswordReset,
   resetPassword,
   updateProfile,
-} from '../controllers/authController.js';
+} from '../controllers/auth/index.js';
 import { requireAuth } from '../middlewares/auth.js';
 
 const router = Router();

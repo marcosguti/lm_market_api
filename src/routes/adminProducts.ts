@@ -5,7 +5,7 @@ import {
   deleteAdminProduct,
   listAdminProducts,
   patchAdminProduct,
-} from '../controllers/adminProductController.js';
+} from '../controllers/adminProducts/index.js';
 
 const router = Router();
 

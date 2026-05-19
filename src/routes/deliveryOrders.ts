@@ -5,7 +5,7 @@ import {
   getDeliveryAvailableOrders,
   getMyDeliveryOrders,
   markDeliveryOrderAsDelivered,
-} from '../controllers/deliveryOrderController.js';
+} from '../controllers/deliveryOrders/index.js';
 import { requireAuth, requireRole } from '../middlewares/auth.js';
 
 const router = Router();

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 
-import { getKitchenOrders, patchAdminOrderStatus } from '../controllers/adminOrderController.js';
+import { getKitchenOrders, patchAdminOrderStatus } from '../controllers/adminOrders/index.js';
 import { requireAuth, requireRole } from '../middlewares/auth.js';
 
 const router = Router();

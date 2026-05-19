@@ -4,7 +4,7 @@ import {
   getNotifications,
   markAllNotificationsRead,
   markNotificationRead,
-} from '../controllers/notificationController.js';
+} from '../controllers/notifications/index.js';
 import { requireAuth } from '../middlewares/auth.js';
 
 const router = Router();

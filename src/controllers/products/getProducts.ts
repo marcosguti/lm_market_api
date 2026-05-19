@@ -1,16 +1,8 @@
 import type { Product } from '@prisma/client';
 import type { Request, Response } from 'express';
 
-import Joi from 'joi';
-
-import { findProductsPaginated } from '../queries/product.js';
-
-const getProductsQuerySchema = Joi.object({
-  page: Joi.number().integer().min(1).default(1),
-  pageSize: Joi.number().integer().min(1).max(200).default(50),
-  search: Joi.string().allow('').optional(),
-  sort: Joi.string().valid('priceAsc', 'priceDesc').allow(null, '').optional().empty([null, '']),
-});
+import { findProductsPaginated } from '../../queries/product.js';
+import { getProductsQuerySchema } from './schemas.js';
 
 export async function getProducts(req: Request, res: Response): Promise<void> {
   const validation = getProductsQuerySchema.validate(req.query, {

@@ -5,7 +5,7 @@ import {
   deleteAdminUser,
   listAdminUsers,
   patchAdminUser,
-} from '../controllers/adminUserController.js';
+} from '../controllers/adminUsers/index.js';
 
 const router = Router();
 

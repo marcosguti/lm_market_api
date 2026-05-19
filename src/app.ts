@@ -7,7 +7,7 @@ import {
   runExternalProductsSync,
   startExternalProductsSyncSchedule,
 } from './jobs/syncExternalProductsJob.js';
-/* import { authMiddleware } from './middlewares/auth.js'; */
+import { authMiddleware } from './middlewares/auth.js';
 import { endpointGuard } from './middlewares/endpointGuard.js';
 import { createSocketServer } from './realtime/socket.js';
 import setRoutes from './routes/index.js';
@@ -16,6 +16,7 @@ const app = express();
 
 app.use(cors());
 app.use(express.json({ limit: '5mb' }));
+app.use(authMiddleware);
 
 app.use(endpointGuard);
 

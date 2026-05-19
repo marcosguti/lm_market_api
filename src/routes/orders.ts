@@ -6,7 +6,7 @@ import {
   getOrderById,
   getOrderHistory,
   patchCartLines,
-} from '../controllers/orderController.js';
+} from '../controllers/orders/index.js';
 import { requireAuth } from '../middlewares/auth.js';
 
 const router = Router();
