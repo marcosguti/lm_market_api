@@ -1,8 +1,8 @@
-import type { Product } from '@prisma/client';
 import type { Request, Response } from 'express';
 
 import { findProductsPaginated } from '../../queries/product.js';
 import { getProductsQuerySchema } from './schemas.js';
+import { serializePublicProduct } from './serializePublicProduct.js';
 
 export async function getProducts(req: Request, res: Response): Promise<void> {
   const validation = getProductsQuerySchema.validate(req.query, {
@@ -12,9 +12,11 @@ export async function getProducts(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: validation.error.message });
     return;
   }
-  const { page, pageSize, search, sort } = validation.value;
+  const { brand, department, page, pageSize, search, sort } = validation.value;
 
   const result = await findProductsPaginated({
+    brand: brand || undefined,
+    department: department || undefined,
     page,
     pageSize,
     search: search || undefined,
@@ -25,22 +27,4 @@ export async function getProducts(req: Request, res: Response): Promise<void> {
     ...result,
     data: result.data.map(serializePublicProduct),
   });
-}
-
-/** Catálogo público: sin costo, margen ni datos internos de inventario. */
-function serializePublicProduct(p: Product) {
-  return {
-    brand: p.brand,
-    code: p.code,
-    createdAt: p.createdAt,
-    department: p.department,
-    description: p.description,
-    id: p.id,
-    imageUrl: p.imageUrl,
-    name: p.name,
-    price: Number(p.price.toString()),
-    salesToday: p.salesToday,
-    totalStock: p.totalStock,
-    updatedAt: p.updatedAt,
-  };
 }

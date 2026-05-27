@@ -4,6 +4,11 @@ import { Prisma } from '@prisma/client';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import {
+  findOrCreateBrand,
+  findOrCreateDepartment,
+  normalizeCatalogName,
+} from '../../queries/brandDepartment.js';
 import { createProduct, findProductByCode } from '../../queries/product.js';
 import { createSchema } from './schemas.js';
 import { serializeAdminProduct } from './serializeAdminProduct.js';
@@ -23,13 +28,22 @@ export async function createAdminProduct(req: AuthRequest, res: Response): Promi
   }
 
   try {
+    const brandName = normalizeCatalogName(body.brand);
+    const departmentName = normalizeCatalogName(body.department);
+    const [brand, department] = await Promise.all([
+      findOrCreateBrand(brandName),
+      findOrCreateDepartment(departmentName),
+    ]);
+
     const product = await createProduct({
       active: body.active,
       adminMovements: body.adminMovements ?? null,
-      brand: body.brand,
+      brand: brandName,
+      brandRef: { connect: { id: brand.id } },
       code: body.code,
       cost: body.cost as Prisma.Decimal,
-      department: body.department,
+      department: departmentName,
+      departmentRef: { connect: { id: department.id } },
       description: body.description ?? null,
       imageUrl: body.imageUrl ?? null,
       initialBalance: body.initialBalance ?? null,

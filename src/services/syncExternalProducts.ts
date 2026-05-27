@@ -2,9 +2,16 @@ import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
 import prisma from '../prisma.js';
+import {
+  loadBrandNameToIdMap,
+  loadDepartmentNameToIdMap,
+  normalizeCatalogName,
+  resolveBrandId,
+  resolveDepartmentId,
+} from '../queries/brandDepartment.js';
 
 /** Máximo admitido por el API de productos externos */
-const SYNC_FETCH_PAGE_SIZE = 100;
+const SYNC_FETCH_PAGE_SIZE = 500;
 
 export interface ExternalProductRow {
   codigoInterno: string;
@@ -57,6 +64,9 @@ export async function syncExternalProducts(): Promise<{
   totalElements: number;
   upserted: number;
 }> {
+  const brandCache = await loadBrandNameToIdMap();
+  const departmentCache = await loadDepartmentNameToIdMap();
+
   let page = 1;
   let totalPages = 1;
   let totalElements = 0;
@@ -118,7 +128,12 @@ export async function syncExternalProducts(): Promise<{
         continue;
       }
       sourceCodes.add(code);
-      const args = mapRowToUpsertArgs(row);
+      const brandId = await resolveBrandId(String(row.marca ?? ''), brandCache);
+      const departmentId = await resolveDepartmentId(
+        String(row.departamento ?? ''),
+        departmentCache,
+      );
+      const args = mapRowToUpsertArgs(row, brandId, departmentId);
       await prisma.product.upsert(args);
       upserted += 1;
     }
@@ -164,22 +179,28 @@ function getSyncBaseUrl(): string {
   );
 }
 
-function mapRowToUpsertArgs(row: ExternalProductRow): {
+function mapRowToUpsertArgs(
+  row: ExternalProductRow,
+  brandId: string,
+  departmentId: string,
+): {
   create: Prisma.ProductCreateInput;
   update: Prisma.ProductUpdateInput;
   where: { code: string };
 } {
   const code = String(row.codigoInterno ?? '').trim();
   const description = String(row.descripcion ?? '').trim();
-  const brand = String(row.marca ?? '').trim();
-  const department = String(row.departamento ?? '').trim() || '—';
+  const brandName = normalizeCatalogName(String(row.marca ?? ''));
+  const departmentName = normalizeCatalogName(String(row.departamento ?? ''));
 
   const baseData = {
     adminMovements: Math.trunc(Number(row.movimientosAdm ?? 0)),
-    brand: brand || '—',
+    brand: brandName,
+    brandRef: { connect: { id: brandId } },
     code: code || randomUUID(),
     cost: new Prisma.Decimal(String(row.costo ?? 0)),
-    department,
+    department: departmentName,
+    departmentRef: { connect: { id: departmentId } },
     description: description || null,
     initialBalance: Math.trunc(Number(row.saldoInicial ?? 0)),
     inventoryValueBs: new Prisma.Decimal(String(row.valorInventarioBs ?? 0)),
@@ -199,9 +220,11 @@ function mapRowToUpsertArgs(row: ExternalProductRow): {
     update: {
       adminMovements: baseData.adminMovements,
       brand: baseData.brand,
+      brandRef: baseData.brandRef,
       code: baseData.code,
       cost: baseData.cost,
       department: baseData.department,
+      departmentRef: baseData.departmentRef,
       description: baseData.description,
       initialBalance: baseData.initialBalance,
       inventoryValueBs: baseData.inventoryValueBs,

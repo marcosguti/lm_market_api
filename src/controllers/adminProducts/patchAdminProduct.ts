@@ -4,6 +4,11 @@ import { Prisma } from '@prisma/client';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import {
+  findOrCreateBrand,
+  findOrCreateDepartment,
+  normalizeCatalogName,
+} from '../../queries/brandDepartment.js';
 import { findProductById, updateProductById } from '../../queries/product.js';
 import { patchSchema } from './schemas.js';
 import { serializeAdminProduct } from './serializeAdminProduct.js';
@@ -29,9 +34,26 @@ export async function patchAdminProduct(req: AuthRequest, res: Response): Promis
   const body = validation.value;
   const data: Prisma.ProductUpdateInput = {};
   if (body.imageUrl !== undefined) data.imageUrl = body.imageUrl || null;
-  if (body.brand !== undefined) data.brand = body.brand;
   if (body.description !== undefined) data.description = body.description || null;
 
-  const product = await updateProductById(id, data);
-  res.json({ product: serializeAdminProduct(product) });
+  try {
+    if (body.brand !== undefined) {
+      const brandName = normalizeCatalogName(body.brand);
+      const brand = await findOrCreateBrand(brandName);
+      data.brand = brandName;
+      data.brandRef = { connect: { id: brand.id } };
+    }
+    if (body.department !== undefined) {
+      const departmentName = normalizeCatalogName(body.department);
+      const department = await findOrCreateDepartment(departmentName);
+      data.department = departmentName;
+      data.departmentRef = { connect: { id: department.id } };
+    }
+
+    const product = await updateProductById(id, data);
+    res.json({ product: serializeAdminProduct(product) });
+  } catch (e) {
+    console.error('[admin-products] patch failed', e);
+    res.status(500).json({ error: 'Failed to update product' });
+  }
 }

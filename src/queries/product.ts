@@ -1,11 +1,14 @@
-import type { Prisma, Product } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
 
 import prisma from '../prisma.js';
+import { buildBrandFilter, buildDepartmentFilter } from './brandDepartment.js';
 
 export type AdminProductActiveFilter = 'all' | 'false' | 'true';
 
 export interface FindAdminProductsPaginatedParams {
   active?: AdminProductActiveFilter;
+  brand?: string;
+  department?: string;
   page: number;
   pageSize: number;
   search?: string;
@@ -13,6 +16,8 @@ export interface FindAdminProductsPaginatedParams {
 }
 
 export interface FindProductsPaginatedParams {
+  brand?: string;
+  department?: string;
   page: number;
   pageSize: number;
   search?: string;
@@ -20,7 +25,7 @@ export interface FindProductsPaginatedParams {
 }
 
 export interface FindProductsPaginatedResult {
-  data: Product[];
+  data: ProductWithRelations[];
   page: number;
   pageSize: number;
   total: number;
@@ -28,14 +33,22 @@ export interface FindProductsPaginatedResult {
 }
 
 export type ProductListSort = 'priceAsc' | 'priceDesc';
+export type ProductWithRelations = Prisma.ProductGetPayload<{
+  include: { brandRef: true; departmentRef: true };
+}>;
 
-export async function createProduct(data: Prisma.ProductCreateInput): Promise<Product> {
-  return prisma.product.create({ data });
+const productInclude = { brandRef: true, departmentRef: true } as const;
+
+export async function createProduct(
+  data: Prisma.ProductCreateInput,
+): Promise<ProductWithRelations> {
+  return prisma.product.create({ data, include: productInclude });
 }
 
-export async function deactivateProductById(id: string): Promise<Product> {
+export async function deactivateProductById(id: string): Promise<ProductWithRelations> {
   return prisma.product.update({
     data: { active: false },
+    include: productInclude,
     where: { id },
   });
 }
@@ -43,7 +56,7 @@ export async function deactivateProductById(id: string): Promise<Product> {
 export async function findAdminProductsPaginated(
   params: FindAdminProductsPaginatedParams,
 ): Promise<FindProductsPaginatedResult> {
-  const { active = 'all', page, pageSize, search, sort } = params;
+  const { active = 'all', brand, department, page, pageSize, search, sort } = params;
   const skip = (page - 1) * pageSize;
 
   const searchTrim = search?.trim();
@@ -59,11 +72,14 @@ export async function findAdminProductsPaginated(
 
   const where: Prisma.ProductWhereInput = {
     ...activeWhere,
+    ...buildBrandFilter(brand),
+    ...buildDepartmentFilter(department),
     ...buildSearchWhere(searchTrim),
   };
 
   const [data, total] = await Promise.all([
     prisma.product.findMany({
+      include: productInclude,
       orderBy,
       skip,
       take: pageSize,
@@ -83,18 +99,18 @@ export async function findAdminProductsPaginated(
   };
 }
 
-export async function findProductByCode(code: string): Promise<null | Product> {
-  return prisma.product.findUnique({ where: { code } });
+export async function findProductByCode(code: string): Promise<null | ProductWithRelations> {
+  return prisma.product.findUnique({ include: productInclude, where: { code } });
 }
 
-export async function findProductById(id: string): Promise<null | Product> {
-  return prisma.product.findUnique({ where: { id } });
+export async function findProductById(id: string): Promise<null | ProductWithRelations> {
+  return prisma.product.findUnique({ include: productInclude, where: { id } });
 }
 
 export async function findProductsPaginated(
   params: FindProductsPaginatedParams,
 ): Promise<FindProductsPaginatedResult> {
-  const { page, pageSize, search, sort } = params;
+  const { brand, department, page, pageSize, search, sort } = params;
   const skip = (page - 1) * pageSize;
 
   const searchTrim = search?.trim();
@@ -107,11 +123,14 @@ export async function findProductsPaginated(
 
   const where: Prisma.ProductWhereInput = {
     active: true,
+    ...buildBrandFilter(brand),
+    ...buildDepartmentFilter(department),
     ...buildSearchWhere(searchTrim),
   };
 
   const [data, total] = await Promise.all([
     prisma.product.findMany({
+      include: productInclude,
       orderBy,
       skip,
       take: pageSize,
@@ -134,8 +153,8 @@ export async function findProductsPaginated(
 export async function updateProductById(
   id: string,
   data: Prisma.ProductUpdateInput,
-): Promise<Product> {
-  return prisma.product.update({ data, where: { id } });
+): Promise<ProductWithRelations> {
+  return prisma.product.update({ data, include: productInclude, where: { id } });
 }
 
 function buildSearchWhere(searchTrim: string | undefined): Prisma.ProductWhereInput {
@@ -143,7 +162,10 @@ function buildSearchWhere(searchTrim: string | undefined): Prisma.ProductWhereIn
   return {
     OR: [
       { description: { contains: searchTrim, mode: 'insensitive' } },
+      { brandRef: { name: { contains: searchTrim, mode: 'insensitive' } } },
       { brand: { contains: searchTrim, mode: 'insensitive' } },
+      { departmentRef: { name: { contains: searchTrim, mode: 'insensitive' } } },
+      { department: { contains: searchTrim, mode: 'insensitive' } },
       { name: { contains: searchTrim, mode: 'insensitive' } },
       { code: { contains: searchTrim, mode: 'insensitive' } },
     ],

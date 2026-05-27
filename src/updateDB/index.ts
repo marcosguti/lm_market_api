@@ -17,6 +17,8 @@ type TransactionClient = Omit<
   '$connect' | '$disconnect' | '$extends' | '$on' | '$transaction' | '$use'
 >;
 
+const PLACEHOLDER = '—';
+
 const migrations: MigrationFunction[] = [
   {
     name: 'Create super admin',
@@ -39,6 +41,76 @@ const migrations: MigrationFunction[] = [
       });
     },
     version: 1,
+  },
+  {
+    name: 'Backfill Brand and Department from Product',
+    up: async (tx: TransactionClient) => {
+      await tx.$executeRaw`
+        INSERT INTO "Brand" ("id", "name", "createdAt", "updatedAt")
+        SELECT gen_random_uuid()::text, src.brand_name, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        FROM (
+          SELECT DISTINCT CASE
+            WHEN TRIM("brand") = '' THEN ${PLACEHOLDER}
+            ELSE TRIM("brand")
+          END AS brand_name
+          FROM "Product"
+        ) AS src
+        WHERE NOT EXISTS (
+          SELECT 1 FROM "Brand" b WHERE b."name" = src.brand_name
+        )
+      `;
+
+      await tx.$executeRaw`
+        INSERT INTO "Department" ("id", "name", "createdAt", "updatedAt")
+        SELECT gen_random_uuid()::text, src.department_name, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
+        FROM (
+          SELECT DISTINCT CASE
+            WHEN TRIM("department") = '' THEN ${PLACEHOLDER}
+            ELSE TRIM("department")
+          END AS department_name
+          FROM "Product"
+        ) AS src
+        WHERE NOT EXISTS (
+          SELECT 1 FROM "Department" d WHERE d."name" = src.department_name
+        )
+      `;
+
+      await tx.$executeRaw`
+        UPDATE "Product" p
+        SET "brandId" = b."id"
+        FROM "Brand" b
+        WHERE b."name" = CASE
+          WHEN TRIM(p."brand") = '' THEN ${PLACEHOLDER}
+          ELSE TRIM(p."brand")
+        END
+      `;
+
+      await tx.$executeRaw`
+        UPDATE "Product" p
+        SET "departmentId" = d."id"
+        FROM "Department" d
+        WHERE d."name" = CASE
+          WHEN TRIM(p."department") = '' THEN ${PLACEHOLDER}
+          ELSE TRIM(p."department")
+        END
+      `;
+
+      const missingBrand = await tx.product.count({ where: { brandId: null } });
+      const missingDepartment = await tx.product.count({ where: { departmentId: null } });
+
+      if (missingBrand > 0 || missingDepartment > 0) {
+        throw new Error(
+          `Brand/Department backfill incomplete: ${missingBrand} products without brandId, ${missingDepartment} without departmentId`,
+        );
+      }
+
+      const brandCount = await tx.brand.count();
+      const departmentCount = await tx.department.count();
+      console.log(
+        `Backfill complete: ${brandCount} brands, ${departmentCount} departments, all products linked`,
+      );
+    },
+    version: 2,
   },
 ];
 

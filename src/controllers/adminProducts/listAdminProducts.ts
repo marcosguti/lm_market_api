@@ -13,10 +13,12 @@ export async function listAdminProducts(req: AuthRequest, res: Response): Promis
     res.status(400).json({ error: validation.error.message });
     return;
   }
-  const { active, page, pageSize, search, sort } = validation.value;
+  const { active, brand, department, page, pageSize, search, sort } = validation.value;
 
   const result = await findAdminProductsPaginated({
     active: active as AdminProductActiveFilter,
+    brand: brand || undefined,
+    department: department || undefined,
     page,
     pageSize,
     search: search || undefined,
