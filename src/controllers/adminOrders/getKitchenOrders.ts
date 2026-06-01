@@ -14,7 +14,8 @@ export async function getKitchenOrders(req: AuthRequest, res: Response): Promise
   }
   try {
     const { page, pageSize } = validation.value;
-    const result = await listKitchenOrders(page, pageSize);
+    const userType = req.userType!;
+    const result = await listKitchenOrders(page, pageSize, userType);
     res.json(result);
   } catch (err) {
     handleOrderError(err, res);

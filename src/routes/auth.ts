@@ -4,6 +4,7 @@ import {
   changePassword,
   getMe,
   login,
+  logout,
   refresh,
   register,
   requestPasswordReset,
@@ -16,6 +17,7 @@ const router = Router();
 
 router.post('/register', register);
 router.post('/login', login);
+router.post('/logout', requireAuth, logout);
 router.post('/recover-password/request', requestPasswordReset);
 router.post('/recover-password/reset', resetPassword);
 router.post('/refresh', refresh);

@@ -1,9 +1,11 @@
 import type { Response } from 'express';
 
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { uploadFile } from '../../libs/filesInDigitalOcean/index.js';
 import {
   findOrCreateBrand,
   findOrCreateDepartment,
@@ -35,6 +37,12 @@ export async function createAdminProduct(req: AuthRequest, res: Response): Promi
       findOrCreateDepartment(departmentName),
     ]);
 
+    let imageUrl: null | string = null;
+    if (req.file) {
+      const fileName = randomUUID();
+      imageUrl = await uploadFile(req.file, fileName);
+    }
+
     const product = await createProduct({
       active: body.active,
       adminMovements: body.adminMovements ?? null,
@@ -45,7 +53,7 @@ export async function createAdminProduct(req: AuthRequest, res: Response): Promi
       department: departmentName,
       departmentRef: { connect: { id: department.id } },
       description: body.description ?? null,
-      imageUrl: body.imageUrl ?? null,
+      imageUrl,
       initialBalance: body.initialBalance ?? null,
       inventoryValueBs: (body.inventoryValueBs as Prisma.Decimal | undefined) ?? null,
       marginPct: (body.marginPct as Prisma.Decimal | undefined) ?? null,

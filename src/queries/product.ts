@@ -38,6 +38,7 @@ export type ProductWithRelations = Prisma.ProductGetPayload<{
 }>;
 
 const productInclude = { brandRef: true, departmentRef: true } as const;
+const MIN_PUBLIC_STOCK = 10;
 
 export async function createProduct(
   data: Prisma.ProductCreateInput,
@@ -123,6 +124,8 @@ export async function findProductsPaginated(
 
   const where: Prisma.ProductWhereInput = {
     active: true,
+    imageUrl: { not: null },
+    totalStock: { gt: MIN_PUBLIC_STOCK },
     ...buildBrandFilter(brand),
     ...buildDepartmentFilter(department),
     ...buildSearchWhere(searchTrim),

@@ -53,10 +53,6 @@ export const createSchema = Joi.object({
   cost: decimalField('cost'),
   department: Joi.string().trim().min(1).required(),
   description: Joi.string().trim().allow('').optional().empty(''),
-  imageUrl: Joi.alternatives()
-    .try(Joi.string().uri({ scheme: ['http', 'https'] }), Joi.string().valid(''))
-    .optional()
-    .empty(''),
   initialBalance: optionalIntField('initialBalance'),
   inventoryValueBs: optionalDecimalField('inventoryValueBs'),
   marginPct: optionalDecimalField('marginPct'),
@@ -70,7 +66,4 @@ export const patchSchema = Joi.object({
   brand: Joi.string().trim().min(1).optional(),
   department: Joi.string().trim().min(1).optional(),
   description: Joi.string().trim().allow('').optional().empty(''),
-  imageUrl: Joi.alternatives()
-    .try(Joi.string().uri({ scheme: ['http', 'https'] }), Joi.string().valid(''))
-    .optional(),
 }).min(1);

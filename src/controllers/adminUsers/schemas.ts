@@ -14,7 +14,14 @@ export const createSchema = Joi.object({
   firstName: Joi.string().required(),
   lastName: Joi.string().required(),
   numberId: Joi.string().required(),
-  password: Joi.string().min(6).optional(),
+  password: Joi.string()
+    .min(8)
+    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/)
+    .optional()
+    .messages({
+      'string.min': 'La contraseña debe tener al menos 8 caracteres',
+      'string.pattern.base': 'La contraseña debe contener mayúsculas, minúsculas y números',
+    }),
   phone: Joi.string().allow('').optional(),
   type: Joi.string().valid('admin', 'client', 'deliveryDriver').required(),
 });

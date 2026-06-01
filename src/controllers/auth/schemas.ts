@@ -6,7 +6,14 @@ export const registerSchema = Joi.object({
   firstName: Joi.string().required(),
   lastName: Joi.string().required(),
   numberId: Joi.string().required(),
-  password: Joi.string().min(6).required(),
+  password: Joi.string()
+    .min(8)
+    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/)
+    .required()
+    .messages({
+      'string.min': 'La contraseña debe tener al menos 8 caracteres',
+      'string.pattern.base': 'La contraseña debe contener mayúsculas, minúsculas y números',
+    }),
   phone: Joi.string().allow(''),
   type: Joi.string().valid('client', 'admin', 'deliveryDriver').default('client'),
 });
@@ -22,7 +29,14 @@ export const requestResetSchema = Joi.object({
 });
 
 export const resetPasswordSchema = Joi.object({
-  newPassword: Joi.string().min(6).required(),
+  newPassword: Joi.string()
+    .min(8)
+    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/)
+    .required()
+    .messages({
+      'string.min': 'La contraseña debe tener al menos 8 caracteres',
+      'string.pattern.base': 'La contraseña debe contener mayúsculas, minúsculas y números',
+    }),
   token: Joi.string().required(),
 });
 
@@ -35,7 +49,14 @@ export const updateProfileSchema = Joi.object({
 
 export const changePasswordSchema = Joi.object({
   currentPassword: Joi.string().required(),
-  newPassword: Joi.string().min(6).required(),
+  newPassword: Joi.string()
+    .min(8)
+    .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/)
+    .required()
+    .messages({
+      'string.min': 'La contraseña debe tener al menos 8 caracteres',
+      'string.pattern.base': 'La contraseña debe contener mayúsculas, minúsculas y números',
+    }),
 });
 
 export const refreshSchema = Joi.object({

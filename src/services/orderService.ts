@@ -36,6 +36,10 @@ export interface OrderWithLines extends Omit<Order, 'products' | 'totalAmount'> 
   totalAmount: number;
 }
 
+export interface OrderWithUser extends OrderWithLines {
+  userNumberId: string;
+}
+
 export class OrderDomainError extends Error {
   constructor(
     public readonly code: string,
@@ -382,17 +386,21 @@ export async function listDeliveryMine(
 export async function listKitchenOrders(
   page: number,
   pageSize: number,
+  _userType: UserType,
 ): Promise<{
-  data: OrderWithLines[];
+  data: OrderWithUser[];
   page: number;
   pageSize: number;
   total: number;
   totalPages: number;
 }> {
   const skip = (page - 1) * pageSize;
-  const where: PrismaType.OrderWhereInput = { status: 'pagoConfirmado' };
+  const where: PrismaType.OrderWhereInput = {
+    status: { notIn: ['pendiente', 'cancelada'] },
+  };
   const [data, total] = await Promise.all([
     client.order.findMany({
+      include: { user: { select: { numberId: true } } },
       orderBy: { createdAt: 'desc' },
       skip,
       take: pageSize,
@@ -401,7 +409,10 @@ export async function listKitchenOrders(
     client.order.count({ where }),
   ]);
   return {
-    data: data.map(serializeOrder),
+    data: data.map((order) => ({
+      ...serializeOrder(order),
+      userNumberId: order.user.numberId,
+    })),
     page,
     pageSize,
     total,

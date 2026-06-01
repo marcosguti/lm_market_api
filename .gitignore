@@ -6,3 +6,5 @@ saveDB/*
 logs/*
 db_data/*
 dist/*
+product_images/*
+!product_images/.gitkeep

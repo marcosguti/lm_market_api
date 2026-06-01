@@ -1,9 +1,11 @@
 import type { Response } from 'express';
 
 import { Prisma } from '@prisma/client';
+import { randomUUID } from 'crypto';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { deleteFile, uploadFile } from '../../libs/filesInDigitalOcean/index.js';
 import {
   findOrCreateBrand,
   findOrCreateDepartment,
@@ -33,7 +35,7 @@ export async function patchAdminProduct(req: AuthRequest, res: Response): Promis
 
   const body = validation.value;
   const data: Prisma.ProductUpdateInput = {};
-  if (body.imageUrl !== undefined) data.imageUrl = body.imageUrl || null;
+
   if (body.description !== undefined) data.description = body.description || null;
 
   try {
@@ -50,10 +52,20 @@ export async function patchAdminProduct(req: AuthRequest, res: Response): Promis
       data.departmentRef = { connect: { id: department.id } };
     }
 
+    if (req.file) {
+      const fileName = randomUUID();
+      const newImageUrl = await uploadFile(req.file, fileName);
+      data.imageUrl = newImageUrl;
+
+      if (existing.imageUrl) {
+        await deleteFile(existing.imageUrl);
+      }
+    }
+
     const product = await updateProductById(id, data);
     res.json({ product: serializeAdminProduct(product) });
   } catch (e) {
-    console.error('[admin-products] patch failed', e);
+    console.error('[admin-products] stack:', (e as Error).stack);
     res.status(500).json({ error: 'Failed to update product' });
   }
 }

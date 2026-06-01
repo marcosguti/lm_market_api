@@ -14,7 +14,11 @@ import setRoutes from './routes/index.js';
 
 const app = express();
 
-app.use(cors());
+const corsOptions: cors.CorsOptions = {
+  credentials: true,
+  origin: 'http://localhost:5173',
+};
+app.use(cors(corsOptions));
 app.use(express.json({ limit: '5mb' }));
 app.use(authMiddleware);
 

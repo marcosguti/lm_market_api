@@ -18,7 +18,8 @@ let io: null | Server = null;
 export function createSocketServer(httpServer: HttpServer): Server {
   io = new Server(httpServer, {
     cors: {
-      origin: '*',
+      credentials: true,
+      origin: 'http://localhost:5173',
     },
   });
 
@@ -68,6 +69,10 @@ export function emitKitchenNewPaid(payload: unknown): void {
 
 export function emitOrderCancelled(payload: { orderId: string }): void {
   requireIO().to(KITCHEN_ROOM).emit('order:cancelled', payload);
+}
+
+export function emitOrderUpdated(userId: string, payload: unknown): void {
+  requireIO().to(`user:${userId}`).emit('order:updated', payload);
 }
 
 export function emitUserNotification(userId: string, payload: unknown): void {

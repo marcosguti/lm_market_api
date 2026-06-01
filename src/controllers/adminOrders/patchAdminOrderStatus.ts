@@ -6,6 +6,7 @@ import type { AuthRequest } from '../../middlewares/auth.js';
 import {
   emitDeliveryOrderCancelled,
   emitOrderCancelled,
+  emitOrderUpdated,
   emitUserNotification,
 } from '../../realtime/socket.js';
 import {
@@ -44,6 +45,12 @@ export async function patchAdminOrderStatus(req: AuthRequest, res: Response): Pr
       status: updated.status,
       title: 'Actualización de orden',
       type: 'ORDER_STATUS_CHANGED',
+    });
+
+    emitOrderUpdated(updated.userId, {
+      id: updated.id,
+      status: updated.status,
+      totalAmount: updated.totalAmount,
     });
 
     if (updated.status === 'cancelada') {

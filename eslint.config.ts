@@ -9,7 +9,9 @@ import { fileURLToPath } from 'url';
 const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default [
-  { ignores: ['dist/**', 'node_modules/**'] },
+  {
+    ignores: ['dist/**', 'node_modules/**', 'db_data/**', 'saveDB/**', 'loadDB/**'],
+  },
   js.configs.recommended,
   eslintPluginN.configs['flat/recommended'],
   {

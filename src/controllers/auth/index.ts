@@ -1,6 +1,7 @@
 export { changePassword } from './changePassword.js';
 export { getMe } from './getMe.js';
 export { login } from './login.js';
+export { logout } from './logout.js';
 export { refresh } from './refresh.js';
 export { register } from './register.js';
 export { requestPasswordReset } from './requestPasswordReset.js';
