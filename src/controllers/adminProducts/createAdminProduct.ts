@@ -1,7 +1,7 @@
 import type { Response } from 'express';
 
 import { Prisma } from '@prisma/client';
-import { randomUUID } from 'crypto';
+import { v4 as uuidv4 } from 'uuid';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
@@ -39,7 +39,7 @@ export async function createAdminProduct(req: AuthRequest, res: Response): Promi
 
     let imageUrl: null | string = null;
     if (req.file) {
-      const fileName = randomUUID();
+      const fileName = uuidv4();
       imageUrl = await uploadFile(req.file, fileName);
     }
 

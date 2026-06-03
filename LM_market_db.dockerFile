@@ -1,2 +1,2 @@
 FROM postgres:17
-EXPOSE 5432
+EXPOSE 5434

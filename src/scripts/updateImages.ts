@@ -4,6 +4,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 import '../loadEnv.js';
+import { v4 as uuidv4 } from 'uuid';
+
 import { uploadBuffer } from '../libs/filesInDigitalOcean/index.js';
 import prisma from '../prisma.js';
 import { findProductByCode, updateProductById } from '../queries/product.js';
@@ -138,7 +140,7 @@ async function processImageFile(filePath: string, summary: Summary): Promise<voi
     buffer,
     contentType: mimeForExtension(ext),
     extension: extensionWithoutDot(ext),
-    fileName: product.code,
+    fileName: uuidv4(),
   });
 
   await updateProductById(product.id, { imageUrl });

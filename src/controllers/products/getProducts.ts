@@ -12,11 +12,13 @@ export async function getProducts(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: validation.error.message });
     return;
   }
-  const { brand, department, page, pageSize, search, sort } = validation.value;
+  const { brand, department, maxPrice, minPrice, page, pageSize, search, sort } = validation.value;
 
   const result = await findProductsPaginated({
     brand: brand || undefined,
     department: department || undefined,
+    maxPrice: maxPrice || undefined,
+    minPrice: minPrice || undefined,
     page,
     pageSize,
     search: search || undefined,

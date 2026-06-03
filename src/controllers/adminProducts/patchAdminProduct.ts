@@ -1,7 +1,7 @@
 import type { Response } from 'express';
 
 import { Prisma } from '@prisma/client';
-import { randomUUID } from 'crypto';
+import { v4 as uuidv4 } from 'uuid';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
@@ -53,7 +53,7 @@ export async function patchAdminProduct(req: AuthRequest, res: Response): Promis
     }
 
     if (req.file) {
-      const fileName = randomUUID();
+      const fileName = uuidv4();
       const newImageUrl = await uploadFile(req.file, fileName);
       data.imageUrl = newImageUrl;
 

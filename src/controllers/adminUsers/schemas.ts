@@ -14,6 +14,7 @@ export const createSchema = Joi.object({
   firstName: Joi.string().required(),
   lastName: Joi.string().required(),
   numberId: Joi.string().required(),
+  numberIdType: Joi.string().valid('V', 'E', 'P', 'J').required(),
   password: Joi.string()
     .min(8)
     .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/)
@@ -32,6 +33,7 @@ export const patchSchema = Joi.object({
   firstName: Joi.string().optional(),
   lastName: Joi.string().optional(),
   numberId: Joi.string().optional(),
+  numberIdType: Joi.string().valid('V', 'E', 'P', 'J').optional(),
   phone: Joi.string().allow('').optional(),
   type: Joi.string().valid('admin', 'client', 'deliveryDriver').optional(),
 }).min(1);

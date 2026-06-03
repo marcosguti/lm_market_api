@@ -9,7 +9,7 @@
     "build": "tsc",
     "start": "node dist/app.js",
     "createImageDB": "docker image build -f LM_market_db.dockerFile -t db_lm_market .",
-    "createContainerDB": "mkdir -p db_data && chown $USER:$(id -gn) db_data && chmod 755 db_data && docker run --env-file .env -p 5432:5432 -d --name db_lm_market -v $(pwd)/db_data:/var/lib/postgresql/data --user $(id -u):$(id -g) postgres:17",
+    "createContainerDB": "mkdir -p db_data && chown $USER:$(id -gn) db_data && chmod 755 db_data && docker run --env-file .env -p 5434:5432 -d --name db_lm_market -v $(pwd)/db_data:/var/lib/postgresql/data --user $(id -u):$(id -g) postgres:17",
     "removeContainerDB": "docker rm db_lm_market -f -v",
     "removeImageDB": "docker image rm -f db_lm_market",
     "runMigration": "npx prisma migrate deploy && npx prisma generate",

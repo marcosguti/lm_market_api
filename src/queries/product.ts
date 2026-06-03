@@ -1,4 +1,4 @@
-import type { Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 import prisma from '../prisma.js';
 import { buildBrandFilter, buildDepartmentFilter } from './brandDepartment.js';
@@ -18,6 +18,8 @@ export interface FindAdminProductsPaginatedParams {
 export interface FindProductsPaginatedParams {
   brand?: string;
   department?: string;
+  maxPrice?: number;
+  minPrice?: number;
   page: number;
   pageSize: number;
   search?: string;
@@ -111,7 +113,7 @@ export async function findProductById(id: string): Promise<null | ProductWithRel
 export async function findProductsPaginated(
   params: FindProductsPaginatedParams,
 ): Promise<FindProductsPaginatedResult> {
-  const { brand, department, page, pageSize, search, sort } = params;
+  const { brand, department, maxPrice, minPrice, page, pageSize, search, sort } = params;
   const skip = (page - 1) * pageSize;
 
   const searchTrim = search?.trim();
@@ -122,6 +124,16 @@ export async function findProductsPaginated(
         ? { price: 'desc' }
         : { name: 'asc' };
 
+  const priceFilter: Prisma.ProductWhereInput = {};
+  if (minPrice !== undefined && minPrice > 0) {
+    priceFilter.price = { gte: new Prisma.Decimal(String(minPrice)) };
+  } else {
+    priceFilter.price = { gte: new Prisma.Decimal('0.1') };
+  }
+  if (maxPrice !== undefined && maxPrice <= 50) {
+    priceFilter.price = { ...priceFilter.price, lt: new Prisma.Decimal(String(maxPrice)) };
+  }
+
   const where: Prisma.ProductWhereInput = {
     active: true,
     imageUrl: { not: null },
@@ -129,6 +141,7 @@ export async function findProductsPaginated(
     ...buildBrandFilter(brand),
     ...buildDepartmentFilter(department),
     ...buildSearchWhere(searchTrim),
+    ...priceFilter,
   };
 
   const [data, total] = await Promise.all([

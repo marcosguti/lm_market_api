@@ -35,6 +35,7 @@ const migrations: MigrationFunction[] = [
           firstName: 'Super',
           lastName: 'Admin',
           numberId: 'super-admin',
+          numberIdType: 'V',
           password: hashedPassword,
           type: 'superAdmin',
         },

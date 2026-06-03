@@ -115,16 +115,24 @@ export async function syncExternalProducts(): Promise<{
       console.log(
         `[product-sync] resolved totalPages=${totalPages} (API declared=${declaredFinite ? declaredPages : 'n/a'}, totalElements=${totalElements}, firstPageRows=${rows.length}, requestedPageSize=${SYNC_FETCH_PAGE_SIZE})`,
       );
+      // eslint-disable-next-line no-console -- sync diagnostics
+      console.log(
+        `[product-sync] inicio: totalElements=${totalElements}, páginas a sincronizar=${totalPages}`,
+      );
     } else if (totalElements <= 0 && Number.isFinite(declaredPages) && declaredPages >= 1) {
       totalPages = declaredPages;
     }
 
     lastProcessedPage = page;
 
+    let pageUpserted = 0;
+    let pageSkippedWithoutCode = 0;
+
     for (const row of rows) {
       const code = String(row.codigoInterno ?? '').trim();
       if (!code) {
         skippedWithoutCode += 1;
+        pageSkippedWithoutCode += 1;
         continue;
       }
       sourceCodes.add(code);
@@ -136,7 +144,14 @@ export async function syncExternalProducts(): Promise<{
       const args = mapRowToUpsertArgs(row, brandId, departmentId);
       await prisma.product.upsert(args);
       upserted += 1;
+      pageUpserted += 1;
     }
+
+    const totalLabel = totalElements > 0 ? String(totalElements) : '?';
+    // eslint-disable-next-line no-console -- sync diagnostics
+    console.log(
+      `[product-sync] página ${page}/${totalPages}: filas=${rows.length}, upserted=${pageUpserted}, sinCódigo=${pageSkippedWithoutCode}, acumulado upserted=${upserted}/${totalLabel}, códigos distintos=${sourceCodes.size}`,
+    );
 
     if (rows.length === 0) break;
     if (totalElements > 0 && upserted >= totalElements) break;
@@ -161,6 +176,11 @@ export async function syncExternalProducts(): Promise<{
     data: { active: false },
     where: deactivateWhere,
   });
+
+  // eslint-disable-next-line no-console -- sync diagnostics
+  console.log(
+    `[product-sync] fin: totalElements=${totalElements}, upserted=${upserted}, páginas=${lastProcessedPage}, códigos distintos=${sourceCodes.size}, sinCódigo=${skippedWithoutCode}, desactivados=${deactivated}`,
+  );
 
   return {
     deleted: deactivated,

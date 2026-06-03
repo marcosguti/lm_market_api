@@ -6,6 +6,7 @@ export const registerSchema = Joi.object({
   firstName: Joi.string().required(),
   lastName: Joi.string().required(),
   numberId: Joi.string().required(),
+  numberIdType: Joi.string().valid('V', 'E', 'P', 'J').required(),
   password: Joi.string()
     .min(8)
     .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/)

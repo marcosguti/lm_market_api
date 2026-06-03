@@ -36,6 +36,7 @@ export async function createAdminUser(req: AuthRequest, res: Response): Promise<
       firstName: body.firstName,
       lastName: body.lastName,
       numberId: body.numberId,
+      numberIdType: body.numberIdType,
       password: hashedPassword,
       phone: body.phone || undefined,
       type: body.type,

@@ -51,6 +51,7 @@ export async function patchAdminUser(req: AuthRequest, res: Response): Promise<v
       ...(body.firstName !== undefined && { firstName: body.firstName }),
       ...(body.lastName !== undefined && { lastName: body.lastName }),
       ...(body.numberId !== undefined && { numberId: body.numberId }),
+      ...(body.numberIdType !== undefined && { numberIdType: body.numberIdType }),
       ...(body.phone !== undefined && { phone: body.phone }),
       ...(body.type !== undefined && { type: body.type }),
     });

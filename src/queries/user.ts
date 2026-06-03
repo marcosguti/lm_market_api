@@ -1,4 +1,4 @@
-import type { Prisma, User, UserType } from '@prisma/client';
+import type { NumberIdType, Prisma, User, UserType } from '@prisma/client';
 import type { PrismaClient } from '@prisma/client';
 
 import prisma from '../prisma.js';
@@ -13,6 +13,7 @@ export async function createUser(data: {
   firstName: string;
   lastName: string;
   numberId: string;
+  numberIdType: NumberIdType;
   password: string;
   phone?: string;
   type?: UserType;
@@ -24,6 +25,7 @@ export async function createUser(data: {
       firstName: data.firstName,
       lastName: data.lastName,
       numberId: data.numberId,
+      numberIdType: data.numberIdType,
       password: data.password,
       phone: data.phone,
       type: data.type ?? 'client',
@@ -116,6 +118,7 @@ export async function updateUserByAdmin(
     firstName?: string;
     lastName?: string;
     numberId?: string;
+    numberIdType?: NumberIdType;
     phone?: string;
     type?: UserType;
   },
@@ -127,6 +130,7 @@ export async function updateUserByAdmin(
       ...(data.firstName !== undefined && { firstName: data.firstName }),
       ...(data.lastName !== undefined && { lastName: data.lastName }),
       ...(data.numberId !== undefined && { numberId: data.numberId }),
+      ...(data.numberIdType !== undefined && { numberIdType: data.numberIdType }),
       ...(data.phone !== undefined && { phone: data.phone || null }),
       ...(data.type !== undefined && { type: data.type }),
     },

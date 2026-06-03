@@ -3,6 +3,7 @@ import type { Server as HttpServer } from 'http';
 
 import { Server, type Socket } from 'socket.io';
 
+import { isCorsOriginAllowed } from '../libs/corsOrigins.js';
 import { verifyToken } from '../libs/jwt.js';
 import { findUserById } from '../queries/user.js';
 
@@ -19,7 +20,13 @@ export function createSocketServer(httpServer: HttpServer): Server {
   io = new Server(httpServer, {
     cors: {
       credentials: true,
-      origin: 'http://localhost:5173',
+      origin: (origin, callback) => {
+        if (isCorsOriginAllowed(origin)) {
+          callback(null, true);
+          return;
+        }
+        callback(new Error('Not allowed by CORS'));
+      },
     },
   });
 
