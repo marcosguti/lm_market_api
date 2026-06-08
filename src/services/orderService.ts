@@ -9,6 +9,7 @@ import type {
 import { Prisma, PrismaClient } from '@prisma/client';
 
 import prisma from '../prisma.js';
+import { emitOrderUpdated } from '../realtime/socket.js';
 
 export interface CartLineInput {
   code: string;
@@ -514,7 +515,7 @@ export async function updatePendingOrderLines(
   orderId: string,
   lines: CartLineInput[],
 ): Promise<{ changes: InventoryChange[]; order: OrderWithLines }> {
-  return client.$transaction(async (tx) => {
+  const result = await client.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
     if (!order || order.userId !== userId) {
       throw new OrderDomainError('ORDER_NOT_FOUND', 'Order not found', 404);
@@ -527,6 +528,8 @@ export async function updatePendingOrderLines(
     const updated = await updateOrderLinesInTx(tx, order.id, reconciled.lines);
     return { changes: reconciled.changes, order: serializeOrder(updated) };
   });
+  emitOrderUpdated(userId, result.order);
+  return result;
 }
 
 function canTransitionByAdmin(from: OrderStatus, to: OrderStatus): boolean {
