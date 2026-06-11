@@ -12,3 +12,9 @@ export const patchLinesSchema = Joi.object({
     )
     .required(),
 });
+
+export const confirmPaymentSchema = Joi.object({
+  method: Joi.string().valid('cash', 'zelle', 'mobilePayment', 'binance').required(),
+  paidAt: Joi.date().iso().allow(null).optional(),
+  reference: Joi.string().trim().min(3).max(100).allow(null, '').optional(),
+});

@@ -23,13 +23,20 @@ enum NumberIdType {
 }
 
 enum OrderStatus {
-  pendiente
-  pagoConfirmado
-  preparando
-  listaParaReparto
-  enReparto
-  entregada
-  cancelada
+  pending
+  paymentConfirmed
+  preparing
+  readyForDelivery
+  outForDelivery
+  delivered
+  cancelled
+}
+
+enum PaymentMethod {
+  cash
+  zelle
+  mobilePayment
+  binance
 }
 
 model User {
@@ -110,29 +117,49 @@ model Product {
 }
 
 model Order {
-  id               String      @id @default(uuid())
-  userId           String
-  status           OrderStatus @default(pendiente)
-  products         Json        @default("[]")
-  totalAmount      Decimal     @db.Decimal(14, 2)
-  confirmationCode String?     @unique
-  paidAt           DateTime?
-  deliveryUserId   String?
-  deliveryAddress  String?
-  deliveryPhone    String?
-  customerNotes    String?
-  idempotencyKey   String?     @unique
-  version          Int         @default(0)
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  id                    String      @id @default(uuid())
+  userId                String
+  status                OrderStatus @default(pending)
+  products              Json        @default("[]")
+  totalAmount           Decimal     @db.Decimal(14, 2)
+  confirmationCode      String?     @unique
+  paidAt                DateTime?
+  deliveryUserId        String?
+  deliveryAddress       String?
+  deliveryPhone         String?
+  customerNotes         String?
+  idempotencyKey        String?     @unique
+  version               Int         @default(0)
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  paymentMethod         PaymentMethod?
+  paymentReference      String?
+  paymentDate           DateTime?
+  paymentScreenshotUrl  String?
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   deliveryUser  User?          @relation("OrderDeliveryUser", fields: [deliveryUserId], references: [id])
   notifications Notification[]
+  payment       Payment?
 
   @@index([userId, status])
   @@index([status])
   @@index([deliveryUserId])
+}
+
+model Payment {
+  id            String        @id @default(uuid())
+  orderId       String        @unique
+  method        PaymentMethod
+  reference     String
+  paidAt        DateTime
+  screenshotUrl String?
+  verifiedAt    DateTime?
+  verifiedBy    String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
 
 model Notification {
@@ -193,4 +220,16 @@ model PasswordResetToken {
 
   @@index([userId])
   @@index([token])
+}
+
+model Deal {
+  id          String   @id @default(uuid())
+  description String?  @db.VarChar(300)
+  imageUrl    String
+  startDate   DateTime
+  endDate     DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([startDate, endDate])
 }

@@ -55,6 +55,48 @@ export const uploadFile = async (file: FileFromMulter, fileName: string): Promis
   });
 };
 
+export const uploadPaymentScreenshot = async (
+  buffer: Buffer,
+  contentType: string,
+  extension: string,
+  fileName: string,
+): Promise<string> => {
+  const path = `payments/${fileName}.${extension}`;
+
+  await s3Client.send(
+    new PutObjectCommand({
+      ACL: 'public-read',
+      Body: buffer,
+      Bucket: process.env.DIGITAL_OCEAN_BUCKET,
+      ContentType: contentType,
+      Key: path,
+    }),
+  );
+
+  return digitalOceanUrl + path;
+};
+
+export const uploadDealImage = async (
+  buffer: Buffer,
+  contentType: string,
+  extension: string,
+  fileName: string,
+): Promise<string> => {
+  const path = `deals/${fileName}.${extension}`;
+
+  await s3Client.send(
+    new PutObjectCommand({
+      ACL: 'public-read',
+      Body: buffer,
+      Bucket: process.env.DIGITAL_OCEAN_BUCKET,
+      ContentType: contentType,
+      Key: path,
+    }),
+  );
+
+  return digitalOceanUrl + path;
+};
+
 export const deleteFile = async (fileUrl: string) => {
   const pathPart = fileUrl.replace(digitalOceanUrl, '');
   try {

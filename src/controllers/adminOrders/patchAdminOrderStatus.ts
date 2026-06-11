@@ -53,7 +53,7 @@ export async function patchAdminOrderStatus(req: AuthRequest, res: Response): Pr
       totalAmount: updated.totalAmount,
     });
 
-    if (updated.status === 'cancelada') {
+    if (updated.status === 'cancelled') {
       emitOrderCancelled({ orderId: updated.id });
       emitDeliveryOrderCancelled(updated.deliveryUserId, { orderId: updated.id });
     }
