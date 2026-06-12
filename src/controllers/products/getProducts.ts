@@ -12,7 +12,8 @@ export async function getProducts(req: Request, res: Response): Promise<void> {
     res.status(400).json({ error: validation.error.message });
     return;
   }
-  const { brand, department, maxPrice, minPrice, page, pageSize, search, sort } = validation.value;
+  const { brand, department, maxPrice, minPrice, page, pageSize, search, sort, storeId } =
+    validation.value;
 
   const result = await findProductsPaginated({
     brand: brand || undefined,
@@ -23,6 +24,7 @@ export async function getProducts(req: Request, res: Response): Promise<void> {
     pageSize,
     search: search || undefined,
     sort,
+    storeId: storeId || undefined,
   });
 
   res.json({

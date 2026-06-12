@@ -113,6 +113,25 @@ const migrations: MigrationFunction[] = [
     },
     version: 2,
   },
+  {
+    name: 'Populate Stores',
+    up: async (tx: TransactionClient) => {
+      const stores = [
+        { externalBranchCode: '1', name: 'Las Americas' },
+        { externalBranchCode: '2', name: 'Altochama' },
+        { externalBranchCode: '3', name: 'Tovar' },
+      ];
+      for (const s of stores) {
+        await tx.store.upsert({
+          create: s,
+          update: {},
+          where: { externalBranchCode: s.externalBranchCode },
+        });
+      }
+      console.log('Populated stores');
+    },
+    version: 3,
+  },
 ];
 
 const runMigrations = async () => {

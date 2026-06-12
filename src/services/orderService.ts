@@ -139,7 +139,7 @@ export async function confirmPendingOrderPayment(
       code: line.code,
       quantity: line.quantity,
     }));
-    const reconciled = await reconcileLines(tx, existing);
+    const reconciled = await reconcileLines(tx, existing, order.storeId);
     order = await updateOrderLinesInTx(tx, order.id, reconciled.lines);
 
     if (reconciled.lines.length === 0) {
@@ -152,20 +152,30 @@ export async function confirmPendingOrderPayment(
     }
 
     for (const line of reconciled.lines) {
-      const updateResult = await tx.product.updateMany({
-        data: {
-          totalStock: { decrement: line.quantity },
-        },
-        where: {
-          active: true,
-          code: line.code,
-          OR: [{ totalStock: null }, { totalStock: { gte: line.quantity } }],
-        },
-      });
+      const updateResult = order.storeId
+        ? await tx.productStore.updateMany({
+            data: {
+              stockQuantity: { decrement: line.quantity },
+            },
+            where: {
+              product: { active: true, code: line.code },
+              stockQuantity: { gte: line.quantity },
+              storeId: order.storeId,
+            },
+          })
+        : await tx.product.updateMany({
+            data: {},
+            where: {
+              active: true,
+              code: line.code,
+              productStores: { some: { stockQuantity: { gte: line.quantity } } },
+            },
+          });
       if (updateResult.count === 0) {
         const retryReconciled = await reconcileLines(
           tx,
           reconciled.lines.map((l) => ({ code: l.code, quantity: l.quantity })),
+          order.storeId,
         );
         const adjusted = await updateOrderLinesInTx(tx, order.id, retryReconciled.lines);
         throw new OrderDomainError(
@@ -222,7 +232,7 @@ export async function confirmPendingOrderPaymentWithDetails(
       code: line.code,
       quantity: line.quantity,
     }));
-    const reconciled = await reconcileLines(tx, existing);
+    const reconciled = await reconcileLines(tx, existing, order.storeId);
     order = await updateOrderLinesInTx(tx, order.id, reconciled.lines);
 
     if (reconciled.lines.length === 0) {
@@ -235,20 +245,30 @@ export async function confirmPendingOrderPaymentWithDetails(
     }
 
     for (const line of reconciled.lines) {
-      const updateResult = await tx.product.updateMany({
-        data: {
-          totalStock: { decrement: line.quantity },
-        },
-        where: {
-          active: true,
-          code: line.code,
-          OR: [{ totalStock: null }, { totalStock: { gte: line.quantity } }],
-        },
-      });
+      const updateResult = order.storeId
+        ? await tx.productStore.updateMany({
+            data: {
+              stockQuantity: { decrement: line.quantity },
+            },
+            where: {
+              product: { active: true, code: line.code },
+              stockQuantity: { gte: line.quantity },
+              storeId: order.storeId,
+            },
+          })
+        : await tx.product.updateMany({
+            data: {},
+            where: {
+              active: true,
+              code: line.code,
+              productStores: { some: { stockQuantity: { gte: line.quantity } } },
+            },
+          });
       if (updateResult.count === 0) {
         const retryReconciled = await reconcileLines(
           tx,
           reconciled.lines.map((l) => ({ code: l.code, quantity: l.quantity })),
+          order.storeId,
         );
         const adjusted = await updateOrderLinesInTx(tx, order.id, retryReconciled.lines);
         throw new OrderDomainError(
@@ -333,7 +353,7 @@ export async function ensurePendingCart(
       code: line.code,
       quantity: line.quantity,
     }));
-    const reconciled = await reconcileLines(tx, existingLines);
+    const reconciled = await reconcileLines(tx, existingLines, order.storeId);
     if (
       reconciled.changes.length > 0 ||
       JSON.stringify(toOrderLines(order.products as Prisma.JsonValue)) !==
@@ -368,7 +388,7 @@ export async function getOrderByIdForUser(
       code: line.code,
       quantity: line.quantity,
     }));
-    const reconciled = await reconcileLines(tx, currentLines);
+    const reconciled = await reconcileLines(tx, currentLines, order.storeId);
     if (
       reconciled.changes.length > 0 ||
       JSON.stringify(toOrderLines(order.products as Prisma.JsonValue)) !==
@@ -621,7 +641,7 @@ export async function updatePendingOrderLines(
       throw new OrderDomainError('ORDER_NOT_PENDING', 'Order is not pending', 409);
     }
 
-    const reconciled = await reconcileLines(tx, lines);
+    const reconciled = await reconcileLines(tx, lines, order.storeId);
     const updated = await updateOrderLinesInTx(tx, order.id, reconciled.lines);
     return { changes: reconciled.changes, order: serializeOrder(updated) };
   });
@@ -714,6 +734,7 @@ function mergeInputsByCode(inputs: CartLineInput[]): CartLineInput[] {
 async function reconcileLines(
   tx: Prisma.TransactionClient,
   lines: CartLineInput[],
+  storeId: null | string,
 ): Promise<{ changes: InventoryChange[]; lines: OrderLine[] }> {
   const normalized = mergeInputsByCode(lines);
   if (normalized.length === 0) return { changes: [], lines: [] };
@@ -726,6 +747,16 @@ async function reconcileLines(
     },
   });
   const productsByCode = new Map(products.map((p) => [p.code, p]));
+
+  const productStores = storeId
+    ? await tx.productStore.findMany({
+        where: {
+          productId: { in: products.map((p) => p.id) },
+          storeId,
+        },
+      })
+    : [];
+  const productStoresByProductId = new Map(productStores.map((ps) => [ps.productId, ps]));
 
   const resultLines: OrderLine[] = [];
   const changes: InventoryChange[] = [];
@@ -742,7 +773,8 @@ async function reconcileLines(
       continue;
     }
 
-    const stock = product.totalStock;
+    const productStore = productStoresByProductId.get(product.id);
+    const stock = productStore?.stockQuantity ?? null;
     const available = stock === null || stock === undefined ? Number.MAX_SAFE_INTEGER : stock;
     if (available <= 0) {
       changes.push({
@@ -763,7 +795,7 @@ async function reconcileLines(
         requested: line.quantity,
       });
     }
-    const unitPrice = Number(product.price.toString());
+    const unitPrice = productStore ? Number(productStore.price.toString()) : 0;
     resultLines.push({
       code: line.code,
       description: product.description,

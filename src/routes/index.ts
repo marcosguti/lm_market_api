@@ -12,6 +12,7 @@ import departmentRoutes from './departments.js';
 import notificationRoutes from './notifications.js';
 import orderRoutes from './orders.js';
 import productRoutes from './products.js';
+import storeRoutes from './stores.js';
 
 export default function setRoutes(app: Express): void {
   app.use('/api/admin/deals', adminDealRoutes);
@@ -23,6 +24,7 @@ export default function setRoutes(app: Express): void {
   app.use('/api/delivery/orders', deliveryOrderRoutes);
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/orders', orderRoutes);
+  app.use('/api/stores', storeRoutes);
   app.use('/api/brands', brandRoutes);
   app.use('/api/departments', departmentRoutes);
   app.use('/api/products', productRoutes);

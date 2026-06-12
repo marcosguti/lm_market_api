@@ -1,4 +1,9 @@
-import { DeleteObjectCommand, ListObjectsCommand, PutObjectCommand, S3 } from '@aws-sdk/client-s3';
+import {
+  DeleteObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3,
+} from '@aws-sdk/client-s3';
 
 import type { FileFromMulter } from '../../types/index.js';
 
@@ -24,6 +29,39 @@ export interface UploadBufferParams {
   fileName: string;
 }
 
+const IMAGE_PREFIX = 'images/';
+
+export function buildPublicObjectUrl(key: string): string {
+  const base = digitalOceanUrl.replace(/\/$/, '');
+  const normalizedKey = key.replace(/^\//, '');
+  return `${base}/${normalizedKey}`;
+}
+
+export async function listImageObjectKeys(): Promise<string[]> {
+  const keys: string[] = [];
+  let continuationToken: string | undefined;
+
+  do {
+    const response = await s3Client.send(
+      new ListObjectsV2Command({
+        Bucket: process.env.DIGITAL_OCEAN_BUCKET,
+        ContinuationToken: continuationToken,
+        Prefix: IMAGE_PREFIX,
+      }),
+    );
+
+    for (const item of response.Contents ?? []) {
+      if (item.Key && !item.Key.endsWith('/')) {
+        keys.push(item.Key);
+      }
+    }
+
+    continuationToken = response.IsTruncated ? response.NextContinuationToken : undefined;
+  } while (continuationToken);
+
+  return keys;
+}
+
 export const uploadBuffer = async ({
   buffer,
   contentType,
@@ -42,7 +80,7 @@ export const uploadBuffer = async ({
     }),
   );
 
-  return digitalOceanUrl + path;
+  return buildPublicObjectUrl(path);
 };
 
 export const uploadFile = async (file: FileFromMulter, fileName: string): Promise<string> => {
@@ -73,7 +111,7 @@ export const uploadPaymentScreenshot = async (
     }),
   );
 
-  return digitalOceanUrl + path;
+  return buildPublicObjectUrl(path);
 };
 
 export const uploadDealImage = async (
@@ -94,7 +132,7 @@ export const uploadDealImage = async (
     }),
   );
 
-  return digitalOceanUrl + path;
+  return buildPublicObjectUrl(path);
 };
 
 export const deleteFile = async (fileUrl: string) => {
@@ -105,17 +143,6 @@ export const deleteFile = async (fileUrl: string) => {
         Bucket: process.env.DIGITAL_OCEAN_BUCKET,
         Key: pathPart,
       }),
-    );
-    return data;
-  } catch (error) {
-    return error;
-  }
-};
-
-export const getAllFiles = async () => {
-  try {
-    const data = await s3Client.send(
-      new ListObjectsCommand({ Bucket: process.env.DIGITAL_OCEAN_BUCKET }),
     );
     return data;
   } catch (error) {

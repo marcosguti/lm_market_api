@@ -84,29 +84,22 @@ model Department {
 }
 
 model Product {
-  id               String   @id @default(uuid())
-  active           Boolean  @default(true)
-  brand            String
-  brandId          String?
-  code             String   @unique
-  cost             Decimal  @db.Decimal(12, 2)
-  createdAt        DateTime @default(now())
-  department       String
-  departmentId     String?
-  description      String?
-  imageUrl         String?
-  name             String
-  price            Decimal  @db.Decimal(12, 2)
-  updatedAt        DateTime @updatedAt
-  initialBalance   Int?
-  adminMovements   Int?
-  salesToday       Int?
-  totalStock       Int?
-  inventoryValueBs Decimal? @db.Decimal(14, 2)
-  marginPct        Decimal? @db.Decimal(10, 2)
+  id           String   @id @default(uuid())
+  active      Boolean  @default(true)
+  brand       String
+  brandId     String?
+  code        String   @unique
+  createdAt   DateTime @default(now())
+  department  String
+  departmentId String?
+  description String?
+  imageUrl    String?
+  name        String
+  updatedAt   DateTime @updatedAt
 
   brandRef      Brand?      @relation(fields: [brandId], references: [id])
   departmentRef Department? @relation(fields: [departmentId], references: [id])
+  productStores ProductStore[]
 
   @@index([active])
   @@index([name, brand, code])
@@ -116,9 +109,38 @@ model Product {
   @@index([departmentId])
 }
 
+model Store {
+  id                 String   @id @default(uuid())
+  name               String   @db.VarChar(100)
+  externalBranchCode String   @unique @db.VarChar(50)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  productStores ProductStore[]
+  orders        Order[]
+
+  @@index([externalBranchCode])
+}
+
+model ProductStore {
+  productId     String
+  storeId       String
+  price         Decimal  @db.Decimal(12, 2)
+  stockQuantity Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  store   Store   @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@id([productId, storeId])
+  @@index([storeId])
+}
+
 model Order {
   id                    String      @id @default(uuid())
   userId                String
+  storeId               String?
   status                OrderStatus @default(pending)
   products              Json        @default("[]")
   totalAmount           Decimal     @db.Decimal(14, 2)
@@ -139,12 +161,14 @@ model Order {
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   deliveryUser  User?          @relation("OrderDeliveryUser", fields: [deliveryUserId], references: [id])
+  store         Store?         @relation(fields: [storeId], references: [id], onDelete: SetNull)
   notifications Notification[]
   payment       Payment?
 
   @@index([userId, status])
   @@index([status])
   @@index([deliveryUserId])
+  @@index([storeId])
 }
 
 model Payment {

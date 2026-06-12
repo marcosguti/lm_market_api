@@ -1,11 +1,15 @@
 import '../loadEnv.js';
-import { buildExternalProductsRequest } from '../services/syncExternalProducts.js';
+import {
+  buildExternalProductsRequest,
+  extractProductRows,
+} from '../services/syncExternalProducts.js';
 
 const page = Number(process.env.VERIFY_PAGE ?? '1');
-const pageSizeVerify = 100;
+const branch = Number(process.env.VERIFY_BRANCH ?? '1');
+const pageSizeVerify = Number(process.env.VERIFY_PAGE_SIZE ?? '100');
 
 async function main(): Promise<void> {
-  const { headers, url } = buildExternalProductsRequest(page, pageSizeVerify);
+  const { headers, url } = buildExternalProductsRequest(page, branch, pageSizeVerify);
   // eslint-disable-next-line no-console -- CLI output
   console.log('URL:', url);
   const authHeader = Object.keys(headers).find((k) => k.toLowerCase() !== 'accept');
@@ -18,23 +22,27 @@ async function main(): Promise<void> {
   clearTimeout(timeoutId);
   // eslint-disable-next-line no-console -- CLI output
   console.log('HTTP status:', res.status, res.statusText);
-  const body = (await res.json()) as {
-    currentPage?: number;
-    results?: unknown[];
-    totalElements?: number;
-    totalPages?: number;
-  };
+  const body = (await res.json()) as Record<string, unknown>;
+  const rows = extractProductRows(body);
   // eslint-disable-next-line no-console -- CLI output
   console.log(
     'totalElements:',
     body.totalElements,
     'totalPages:',
     body.totalPages,
-    'currentPage:',
-    body.currentPage,
+    'pageNumber:',
+    body.pageNumber ?? body.currentPage,
+    'data.length:',
+    Array.isArray(body.data) ? body.data.length : 0,
     'results.length:',
     Array.isArray(body.results) ? body.results.length : 0,
+    'parsedRows:',
+    rows.length,
   );
+  if (rows[0]) {
+    // eslint-disable-next-line no-console -- CLI output
+    console.log('sample row:', rows[0]);
+  }
 }
 
 main().catch((err) => {

@@ -1,6 +1,5 @@
 import type { Response } from 'express';
 
-import { Prisma } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
@@ -11,7 +10,13 @@ import {
   findOrCreateDepartment,
   normalizeCatalogName,
 } from '../../queries/brandDepartment.js';
-import { createProduct, findProductByCode } from '../../queries/product.js';
+import {
+  createProduct,
+  findProductByCode,
+  findProductById,
+  upsertProductStores,
+} from '../../queries/product.js';
+import { findStores } from '../../queries/store.js';
 import { createSchema } from './schemas.js';
 import { serializeAdminProduct } from './serializeAdminProduct.js';
 
@@ -45,24 +50,29 @@ export async function createAdminProduct(req: AuthRequest, res: Response): Promi
 
     const product = await createProduct({
       active: body.active,
-      adminMovements: body.adminMovements ?? null,
       brand: brandName,
       brandRef: { connect: { id: brand.id } },
       code: body.code,
-      cost: body.cost as Prisma.Decimal,
       department: departmentName,
       departmentRef: { connect: { id: department.id } },
       description: body.description ?? null,
       imageUrl,
-      initialBalance: body.initialBalance ?? null,
-      inventoryValueBs: (body.inventoryValueBs as Prisma.Decimal | undefined) ?? null,
-      marginPct: (body.marginPct as Prisma.Decimal | undefined) ?? null,
       name: body.name,
-      price: body.price as Prisma.Decimal,
-      salesToday: body.salesToday ?? null,
-      totalStock: body.totalStock ?? null,
     });
-    res.status(201).json({ product: serializeAdminProduct(product) });
+
+    const allStores = await findStores();
+    const storeEntries = body.stores?.length
+      ? body.stores.map((s: { price: number; stockQuantity: number; storeId: string }) => ({
+          price: s.price,
+          stockQuantity: s.stockQuantity,
+          storeId: s.storeId,
+        }))
+      : allStores.map((s) => ({ price: 0, stockQuantity: 0, storeId: s.id }));
+
+    await upsertProductStores(product.id, storeEntries);
+
+    const refreshed = await findProductById(product.id);
+    res.status(201).json({ product: serializeAdminProduct(refreshed!) });
   } catch (e) {
     console.error('[admin-products] create failed', e);
     res.status(500).json({ error: 'Failed to create product' });

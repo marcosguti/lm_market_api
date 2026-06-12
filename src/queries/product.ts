@@ -13,6 +13,7 @@ export interface FindAdminProductsPaginatedParams {
   pageSize: number;
   search?: string;
   sort?: null | ProductListSort;
+  storeId?: string;
 }
 
 export interface FindProductsPaginatedParams {
@@ -24,6 +25,7 @@ export interface FindProductsPaginatedParams {
   pageSize: number;
   search?: string;
   sort?: null | ProductListSort;
+  storeId?: string;
 }
 
 export interface FindProductsPaginatedResult {
@@ -36,10 +38,14 @@ export interface FindProductsPaginatedResult {
 
 export type ProductListSort = 'priceAsc' | 'priceDesc';
 export type ProductWithRelations = Prisma.ProductGetPayload<{
-  include: { brandRef: true; departmentRef: true };
+  include: { brandRef: true; departmentRef: true; productStores: { include: { store: true } } };
 }>;
 
-const productInclude = { brandRef: true, departmentRef: true } as const;
+const productInclude = {
+  brandRef: true,
+  departmentRef: true,
+  productStores: { include: { store: true } },
+} as const;
 const MIN_PUBLIC_STOCK = 10;
 
 export async function createProduct(
@@ -59,22 +65,20 @@ export async function deactivateProductById(id: string): Promise<ProductWithRela
 export async function findAdminProductsPaginated(
   params: FindAdminProductsPaginatedParams,
 ): Promise<FindProductsPaginatedResult> {
-  const { active = 'all', brand, department, page, pageSize, search, sort } = params;
+  const { active = 'all', brand, department, page, pageSize, search, storeId } = params;
   const skip = (page - 1) * pageSize;
 
   const searchTrim = search?.trim();
-  const orderBy: Prisma.ProductOrderByWithRelationInput =
-    sort === 'priceAsc'
-      ? { price: 'asc' }
-      : sort === 'priceDesc'
-        ? { price: 'desc' }
-        : { name: 'asc' };
+  const orderBy: Prisma.ProductOrderByWithRelationInput = { name: 'asc' };
 
   const activeWhere: Prisma.ProductWhereInput =
     active === 'all' ? {} : { active: active === 'true' };
 
+  const storeFilter = storeId ? { storeId } : {};
+
   const where: Prisma.ProductWhereInput = {
     ...activeWhere,
+    ...(storeId ? { productStores: { some: storeFilter } } : {}),
     ...buildBrandFilter(brand),
     ...buildDepartmentFilter(department),
     ...buildSearchWhere(searchTrim),
@@ -113,35 +117,35 @@ export async function findProductById(id: string): Promise<null | ProductWithRel
 export async function findProductsPaginated(
   params: FindProductsPaginatedParams,
 ): Promise<FindProductsPaginatedResult> {
-  const { brand, department, maxPrice, minPrice, page, pageSize, search, sort } = params;
+  const { brand, department, maxPrice, minPrice, page, pageSize, search, storeId } = params;
   const skip = (page - 1) * pageSize;
 
   const searchTrim = search?.trim();
-  const orderBy: Prisma.ProductOrderByWithRelationInput =
-    sort === 'priceAsc'
-      ? { price: 'asc' }
-      : sort === 'priceDesc'
-        ? { price: 'desc' }
-        : { name: 'asc' };
+  const orderBy: Prisma.ProductOrderByWithRelationInput = { name: 'asc' };
 
-  const priceFilter: Prisma.ProductWhereInput = {};
-  if (minPrice !== undefined && minPrice > 0) {
-    priceFilter.price = { gte: new Prisma.Decimal(String(minPrice)) };
-  } else {
-    priceFilter.price = { gte: new Prisma.Decimal('0.1') };
-  }
-  if (maxPrice !== undefined && maxPrice <= 50) {
-    priceFilter.price = { ...priceFilter.price, lt: new Prisma.Decimal(String(maxPrice)) };
-  }
+  const storeFilter = storeId ? { storeId } : {};
+
+  const minPriceDecimal =
+    minPrice !== undefined && minPrice > 0
+      ? new Prisma.Decimal(String(minPrice))
+      : new Prisma.Decimal('0.1');
 
   const where: Prisma.ProductWhereInput = {
     active: true,
     imageUrl: { not: null },
-    totalStock: { gt: MIN_PUBLIC_STOCK },
+    productStores: {
+      some: {
+        ...storeFilter,
+        price:
+          maxPrice !== undefined && maxPrice <= 50
+            ? { gte: minPriceDecimal, lt: new Prisma.Decimal(String(maxPrice)) }
+            : { gte: minPriceDecimal },
+        stockQuantity: { gt: MIN_PUBLIC_STOCK },
+      },
+    },
     ...buildBrandFilter(brand),
     ...buildDepartmentFilter(department),
     ...buildSearchWhere(searchTrim),
-    ...priceFilter,
   };
 
   const [data, total] = await Promise.all([
@@ -171,6 +175,36 @@ export async function updateProductById(
   data: Prisma.ProductUpdateInput,
 ): Promise<ProductWithRelations> {
   return prisma.product.update({ data, include: productInclude, where: { id } });
+}
+
+export async function upsertProductStore(
+  productId: string,
+  storeId: string,
+  price: number,
+  stockQuantity: number,
+) {
+  return prisma.productStore.upsert({
+    create: {
+      price: new Prisma.Decimal(String(price)),
+      productId,
+      stockQuantity,
+      storeId,
+    },
+    update: {
+      price: new Prisma.Decimal(String(price)),
+      stockQuantity,
+    },
+    where: { productId_storeId: { productId, storeId } },
+  });
+}
+
+export async function upsertProductStores(
+  productId: string,
+  stores: { price: number; stockQuantity: number; storeId: string }[],
+) {
+  await Promise.all(
+    stores.map((s) => upsertProductStore(productId, s.storeId, s.price, s.stockQuantity)),
+  );
 }
 
 function buildSearchWhere(searchTrim: string | undefined): Prisma.ProductWhereInput {

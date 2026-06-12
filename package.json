@@ -21,6 +21,7 @@
     "updateDB": "tsx src/updateDB/index.ts",
     "updateImages": "tsx src/scripts/updateImages.ts",
     "exportProductsWithoutImage": "tsx src/scripts/exportProductsWithoutImage.ts",
+    "syncDigitalOceanImagesWithProducts": "tsx src/scripts/syncDigitalOceanImagesWithProducts.ts",
     "verify:external-products": "tsx src/scripts/verifyExternalProductsSource.ts",
     "knip": "knip",
     "prepare": "husky"

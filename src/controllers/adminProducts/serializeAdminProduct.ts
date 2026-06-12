@@ -3,30 +3,28 @@ import type { ProductWithRelations } from '../../queries/product.js';
 import { productBrandName, productDepartmentName } from '../../libs/productCatalog.js';
 
 export function serializeAdminProduct(p: ProductWithRelations) {
+  const firstStore = p.productStores[0];
   return {
     active: p.active,
-    adminMovements: p.adminMovements,
     brand: productBrandName(p),
     brandId: p.brandId,
     code: p.code,
-    cost: Number(p.cost.toString()),
     createdAt: p.createdAt,
     department: productDepartmentName(p),
     departmentId: p.departmentId,
     description: p.description,
     id: p.id,
     imageUrl: p.imageUrl,
-    initialBalance: p.initialBalance,
-    inventoryValueBs:
-      p.inventoryValueBs === null || p.inventoryValueBs === undefined
-        ? null
-        : Number(p.inventoryValueBs.toString()),
-    marginPct:
-      p.marginPct === null || p.marginPct === undefined ? null : Number(p.marginPct.toString()),
     name: p.name,
-    price: Number(p.price.toString()),
-    salesToday: p.salesToday,
-    totalStock: p.totalStock,
+    price: firstStore ? Number(firstStore.price.toString()) : 0,
+    productStores: p.productStores.map((ps) => ({
+      price: Number(ps.price.toString()),
+      productId: ps.productId,
+      stockQuantity: ps.stockQuantity,
+      store: ps.store,
+      storeId: ps.storeId,
+    })),
+    totalStock: firstStore ? firstStore.stockQuantity : null,
     updatedAt: p.updatedAt,
   };
 }

@@ -11,7 +11,7 @@ import {
   findOrCreateDepartment,
   normalizeCatalogName,
 } from '../../queries/brandDepartment.js';
-import { findProductById, updateProductById } from '../../queries/product.js';
+import { findProductById, updateProductById, upsertProductStores } from '../../queries/product.js';
 import { patchSchema } from './schemas.js';
 import { serializeAdminProduct } from './serializeAdminProduct.js';
 
@@ -62,8 +62,21 @@ export async function patchAdminProduct(req: AuthRequest, res: Response): Promis
       }
     }
 
-    const product = await updateProductById(id, data);
-    res.json({ product: serializeAdminProduct(product) });
+    await updateProductById(id, data);
+
+    if (body.stores) {
+      await upsertProductStores(
+        id,
+        body.stores.map((s: { price: number; stockQuantity: number; storeId: string }) => ({
+          price: s.price,
+          stockQuantity: s.stockQuantity,
+          storeId: s.storeId,
+        })),
+      );
+    }
+
+    const refreshed = await findProductById(id);
+    res.json({ product: serializeAdminProduct(refreshed!) });
   } catch (e) {
     console.error('[admin-products] stack:', (e as Error).stack);
     res.status(500).json({ error: 'Failed to update product' });

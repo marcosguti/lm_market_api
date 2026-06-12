@@ -7,12 +7,7 @@ let intervalId: ReturnType<typeof setInterval> | undefined;
 
 export async function runExternalProductsSync(): Promise<void> {
   try {
-    const { deleted, lastPage, skippedWithoutCode, sourceDistinctCodes, totalElements, upserted } =
-      await syncExternalProducts();
-    // eslint-disable-next-line no-console -- operational sync summary
-    console.log(
-      `[product-sync] completed: upserted=${upserted}, deleted=${deleted}, sourceDistinctCodes=${sourceDistinctCodes}, skippedWithoutCode=${skippedWithoutCode}, totalElements=${totalElements}, lastPage=${lastPage}`,
-    );
+    await syncExternalProducts();
   } catch (error) {
     console.error('[product-sync] sync failed', error);
   }
