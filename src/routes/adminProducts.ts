@@ -7,8 +7,12 @@ import {
   listAdminProducts,
   patchAdminProduct,
 } from '../controllers/adminProducts/index.js';
+import { requireAuth, requireRole } from '../middlewares/auth.js';
 
 const router = Router();
+
+router.use(requireAuth);
+router.use(requireRole(['admin', 'superAdmin']));
 
 router.get('/', listAdminProducts);
 router.post('/', imageUploadMiddleware, createAdminProduct);

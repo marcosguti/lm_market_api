@@ -1,0 +1,57 @@
+---
+description: Enforce role-based authorization at route level for API endpoints
+globs: '{src/routes/**/*.ts,src/middlewares/**/*.ts}'
+alwaysApply: false
+---
+
+# Endpoint Authorization By User Type
+
+Use one authorization approach only:
+
+- `authMiddleware` runs globally to hydrate `req.userId` and `req.userType`.
+- Authorization is declared in route files with `requireAuth` and `requireRole`.
+- Do not reintroduce global path-matching guards (for example `endpointGuard` registries).
+
+Role policy must be generic per endpoint:
+
+- Add `router.use(requireAuth)`.
+- Add `requireRole([...])` only when endpoint access must be limited to specific user types.
+- If `requireRole` is not present after `requireAuth`, the endpoint is for any authenticated user type.
+- Allowed roles depend on the business case (for example `client`, `deliveryDriver`, `admin`, `superAdmin`, or combinations).
+- Keep business constraints in controllers/services (for example "cannot delete last superAdmin"), not in global path guards.
+
+Deals policy:
+
+- `GET /api/deals` must remain public (no `requireAuth`).
+- `/api/admin/deals` endpoints (`GET`, `POST`, `PATCH`, `DELETE`) must require `admin` or `superAdmin`.
+
+When adding new protected routes:
+
+- Prefer router-level middleware for route groups.
+- If only one endpoint differs, apply `requireRole` at endpoint level explicitly.
+- Do not hardcode admin-only assumptions in the rule; choose roles per endpoint requirement.
+
+Examples:
+
+- Public endpoint (no login required):
+
+```ts
+router.get('/deals', getActiveDealsHandler);
+```
+
+- Auth-only endpoint (any logged-in user type):
+
+```ts
+router.get('/notifications', requireAuth, getNotifications);
+```
+
+- Role-restricted endpoint (specific user types only):
+
+```ts
+router.patch(
+  '/admin/orders/:id/status',
+  requireAuth,
+  requireRole(['admin', 'superAdmin']),
+  patchAdminOrderStatus,
+);
+```

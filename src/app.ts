@@ -9,7 +9,6 @@ import {
 } from './jobs/syncExternalProductsJob.js';
 import { corsOriginCallback } from './libs/corsOrigins.js';
 import { authMiddleware } from './middlewares/auth.js';
-import { endpointGuard } from './middlewares/endpointGuard.js';
 import { createSocketServer } from './realtime/socket.js';
 import setRoutes from './routes/index.js';
 
@@ -22,8 +21,6 @@ const corsOptions: cors.CorsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '5mb' }));
 app.use(authMiddleware);
-
-app.use(endpointGuard);
 
 setRoutes(app);
 
