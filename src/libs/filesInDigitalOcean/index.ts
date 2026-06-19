@@ -135,6 +135,27 @@ export const uploadDealImage = async (
   return buildPublicObjectUrl(path);
 };
 
+export const uploadBannerImage = async (
+  buffer: Buffer,
+  contentType: string,
+  extension: string,
+  fileName: string,
+): Promise<string> => {
+  const path = `banner/${fileName}.${extension}`;
+
+  await s3Client.send(
+    new PutObjectCommand({
+      ACL: 'public-read',
+      Body: buffer,
+      Bucket: process.env.DIGITAL_OCEAN_BUCKET,
+      ContentType: contentType,
+      Key: path,
+    }),
+  );
+
+  return buildPublicObjectUrl(path);
+};
+
 export const deleteFile = async (fileUrl: string) => {
   const pathPart = fileUrl.replace(digitalOceanUrl, '');
   try {

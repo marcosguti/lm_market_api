@@ -25,6 +25,11 @@ Deals policy:
 - `GET /api/deals` must remain public (no `requireAuth`).
 - `/api/admin/deals` endpoints (`GET`, `POST`, `PATCH`, `DELETE`) must require `admin` or `superAdmin`.
 
+Banners policy:
+
+- `GET /api/banners` must remain public (no `requireAuth`).
+- `/api/admin/banners` endpoints (`GET`, `POST`, `PATCH`, `DELETE`) must require `admin` or `superAdmin`.
+
 When adding new protected routes:
 
 - Prefer router-level middleware for route groups.

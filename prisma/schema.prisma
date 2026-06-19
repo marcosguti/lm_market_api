@@ -40,18 +40,18 @@ enum PaymentMethod {
 }
 
 model User {
-  id        String   @id @default(uuid())
-  address   String?
-  createdAt DateTime @default(now())
-  email     String   @unique
-  firstName String
-  lastName  String
-  numberId  String   @unique
+  id           String       @id @default(uuid())
+  address      String?
+  createdAt    DateTime     @default(now())
+  email        String       @unique
+  firstName    String
+  lastName     String
+  numberId     String       @unique
   numberIdType NumberIdType
-  password  String
-  phone     String?
-  type      UserType
-  updatedAt DateTime @updatedAt
+  password     String
+  phone        String?
+  type         UserType
+  updatedAt    DateTime     @updatedAt
 
   linkedDevices       LinkedDevice[]
   notifications       Notification[]
@@ -85,20 +85,20 @@ model Department {
 
 model Product {
   id           String   @id @default(uuid())
-  active      Boolean  @default(true)
-  brand       String
-  brandId     String?
-  code        String   @unique
-  createdAt   DateTime @default(now())
-  department  String
+  active       Boolean  @default(true)
+  brand        String
+  brandId      String?
+  code         String   @unique
+  createdAt    DateTime @default(now())
+  department   String
   departmentId String?
-  description String?
-  imageUrl    String?
-  name        String
-  updatedAt   DateTime @updatedAt
+  description  String?
+  imageUrl     String?
+  name         String
+  updatedAt    DateTime @updatedAt
 
-  brandRef      Brand?      @relation(fields: [brandId], references: [id])
-  departmentRef Department? @relation(fields: [departmentId], references: [id])
+  brandRef      Brand?         @relation(fields: [brandId], references: [id])
+  departmentRef Department?    @relation(fields: [departmentId], references: [id])
   productStores ProductStore[]
 
   @@index([active])
@@ -138,26 +138,26 @@ model ProductStore {
 }
 
 model Order {
-  id                    String      @id @default(uuid())
-  userId                String
-  storeId               String?
-  status                OrderStatus @default(pending)
-  products              Json        @default("[]")
-  totalAmount           Decimal     @db.Decimal(14, 2)
-  confirmationCode      String?     @unique
-  paidAt                DateTime?
-  deliveryUserId        String?
-  deliveryAddress       String?
-  deliveryPhone         String?
-  customerNotes         String?
-  idempotencyKey        String?     @unique
-  version               Int         @default(0)
-  createdAt             DateTime    @default(now())
-  updatedAt             DateTime    @updatedAt
-  paymentMethod         PaymentMethod?
-  paymentReference      String?
-  paymentDate           DateTime?
-  paymentScreenshotUrl  String?
+  id                   String         @id @default(uuid())
+  userId               String
+  storeId              String?
+  status               OrderStatus    @default(pending)
+  products             Json           @default("[]")
+  totalAmount          Decimal        @db.Decimal(14, 2)
+  confirmationCode     String?        @unique
+  paidAt               DateTime?
+  deliveryUserId       String?
+  deliveryAddress      String?
+  deliveryPhone        String?
+  customerNotes        String?
+  idempotencyKey       String?        @unique
+  version              Int            @default(0)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  paymentMethod        PaymentMethod?
+  paymentReference     String?
+  paymentDate          DateTime?
+  paymentScreenshotUrl String?
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   deliveryUser  User?          @relation("OrderDeliveryUser", fields: [deliveryUserId], references: [id])
@@ -256,4 +256,15 @@ model Deal {
   updatedAt   DateTime @updatedAt
 
   @@index([startDate, endDate])
+}
+
+model Banner {
+  id          String   @id @default(uuid())
+  active      Boolean  @default(true)
+  imageUrl    String
+  description String?  @db.VarChar(300)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([active])
 }
