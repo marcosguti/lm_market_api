@@ -1,11 +1,12 @@
 CREATE TABLE "Deal" (
-    "id" TEXT NOT NULL PRIMARY KEY DEFAULT gen_random_uuid()::text,
+    "id" TEXT NOT NULL,
     "description" VARCHAR(300),
     "imageUrl" TEXT NOT NULL,
-    "startDate" TIMESTAMP NOT NULL,
-    "endDate" TIMESTAMP NOT NULL,
-    "createdAt" TIMESTAMP NOT NULL DEFAULT now(),
-    "updatedAt" TIMESTAMP NOT NULL DEFAULT now()
+    "startDate" TIMESTAMP(3) NOT NULL,
+    "endDate" TIMESTAMP(3) NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+    CONSTRAINT "Deal_pkey" PRIMARY KEY ("id")
 );
 
 CREATE INDEX "Deal_startDate_endDate_idx" ON "Deal"("startDate", "endDate");

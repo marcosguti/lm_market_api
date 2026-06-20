@@ -1,0 +1,939 @@
+{
+  "info": {
+    "_postman_id": "lm-market-api-collection-2026",
+    "name": "LM Market API",
+    "description": "Colección completa de la API de LM Market (supermercado). 46 endpoints organizados en 11 categorías. Importar y configurar las variables de colección antes de usar.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:3000" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "adminToken", "value": "" },
+    { "key": "superAdminToken", "value": "" },
+    { "key": "deliveryToken", "value": "" },
+    { "key": "clientUserId", "value": "" },
+    { "key": "orderId", "value": "" },
+    { "key": "productId", "value": "" },
+    { "key": "storeId", "value": "" },
+    { "key": "departmentId", "value": "" },
+    { "key": "brandId", "value": "" },
+    { "key": "dealId", "value": "" },
+    { "key": "bannerId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"cliente@example.com\",\n  \"password\": \"MiPass123\",\n  \"firstName\": \"Juan\",\n  \"lastName\": \"Pérez\",\n  \"numberId\": \"12345678\",\n  \"numberIdType\": \"V\",\n  \"phone\": \"+584121234567\",\n  \"address\": \"Calle 1, Tovar\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "register"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.accessToken) { pm.collectionVariables.set('accessToken', data.accessToken); }",
+                  "if (data.refreshToken) { pm.collectionVariables.set('refreshToken', data.refreshToken); }",
+                  "if (data.user && data.user.id) { pm.collectionVariables.set('clientUserId', data.user.id); }",
+                  "pm.test('Status 200/201', function() { pm.expect(pm.response.code).to.be.oneOf([200, 201]); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"cliente@example.com\",\n  \"password\": \"MiPass123\",\n  \"deviceId\": \"postman-test-device\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "login"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.accessToken) { pm.collectionVariables.set('accessToken', data.accessToken); }",
+                  "if (data.refreshToken) { pm.collectionVariables.set('refreshToken', data.refreshToken); }",
+                  "if (data.user && data.user.id) { pm.collectionVariables.set('clientUserId', data.user.id); }",
+                  "pm.test('Status 200', function() { pm.expect(pm.response.code).to.eql(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "logout"]
+            }
+          }
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\",\n  \"deviceId\": \"postman-test-device\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "refresh"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.accessToken) { pm.collectionVariables.set('accessToken', data.accessToken); }",
+                  "pm.test('Status 200', function() { pm.expect(pm.response.code).to.eql(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Recover Password - Request",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"cliente@example.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/recover-password/request",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "recover-password", "request"]
+            }
+          }
+        },
+        {
+          "name": "Recover Password - Reset",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"token\": \"<reset_token_from_email>\",\n  \"newPassword\": \"NewPass123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/recover-password/reset",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "recover-password", "reset"]
+            }
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "Update Profile",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"Juan Carlos\",\n  \"lastName\": \"Pérez\",\n  \"phone\": \"+584129999999\",\n  \"address\": \"Avenida Principal, Tovar\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/cuenta",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "cuenta"]
+            }
+          }
+        },
+        {
+          "name": "Change Password",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"MiPass123\",\n  \"newPassword\": \"NewPass123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/auth/cambiar-password",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "auth", "cambiar-password"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Public Catalog",
+      "item": [
+        {
+          "name": "Get Products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/products?page=1&pageSize=20&search=arroz&brand={{brandId}}&department={{departmentId}}&storeId={{storeId}}&minPrice=0&maxPrice=50&sort=priceAsc",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "products"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" },
+                { "key": "search", "value": "arroz" },
+                { "key": "brand", "value": "{{brandId}}" },
+                { "key": "department", "value": "{{departmentId}}" },
+                { "key": "storeId", "value": "{{storeId}}" },
+                { "key": "minPrice", "value": "0" },
+                { "key": "maxPrice", "value": "50" },
+                { "key": "sort", "value": "priceAsc" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Brands",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/brands",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "brands"]
+            }
+          }
+        },
+        {
+          "name": "Get Departments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/departments",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "departments"]
+            }
+          }
+        },
+        {
+          "name": "Get Banners",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/banners",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "banners"]
+            }
+          }
+        },
+        {
+          "name": "Get Active Deals",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/deals",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "deals"]
+            }
+          }
+        },
+        {
+          "name": "Get Stores",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/stores",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "stores"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Client Orders",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{accessToken}}" }]
+      },
+      "item": [
+        {
+          "name": "Get Cart",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/cart",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "cart"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data && data.id) { pm.collectionVariables.set('orderId', data.id); }",
+                  "pm.test('Status 200', function() { pm.expect(pm.response.code).to.eql(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Get Order History",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/history?page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "history"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Order by ID",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/{{orderId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "{{orderId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update Cart Lines",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"lines\": [\n    { \"code\": \"PROD-001\", \"quantity\": 2 },\n    { \"code\": \"PROD-002\", \"quantity\": 1 }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/{{orderId}}/lines",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "{{orderId}}", "lines"]
+            }
+          }
+        },
+        {
+          "name": "Confirm Payment (Multipart)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "method", "value": "zelle", "type": "text" },
+                { "key": "reference", "value": "REF123456", "type": "text" },
+                { "key": "paidAt", "value": "2026-06-19T15:30:00Z", "type": "text" },
+                { "key": "screenshot", "src": "/path/to/payment-screenshot.jpg", "type": "file" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/orders/{{orderId}}/confirm-payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "orders", "{{orderId}}", "confirm-payment"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Orders",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+      },
+      "item": [
+        {
+          "name": "Get Kitchen Orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/kitchen?page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "kitchen"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Order Status",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"preparing\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderId}}/status",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderId}}", "status"]
+            }
+          }
+        },
+        {
+          "name": "Verify Payment",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"verify\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/orders/{{orderId}}/verify-payment",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "orders", "{{orderId}}", "verify-payment"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Delivery Orders",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{deliveryToken}}" }]
+      },
+      "item": [
+        {
+          "name": "Get Available Orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/delivery/orders/available?page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "delivery", "orders", "available"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Claim Order",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/delivery/orders/{{orderId}}/claim",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "delivery", "orders", "{{orderId}}", "claim"]
+            }
+          }
+        },
+        {
+          "name": "Get My Orders",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/delivery/orders/mine?page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "delivery", "orders", "mine"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark as Delivered",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/delivery/orders/{{orderId}}/delivered",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "delivery", "orders", "{{orderId}}", "delivered"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Users",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+      },
+      "item": [
+        {
+          "name": "List Users",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users?page=1&pageSize=20&search=",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" },
+                { "key": "search", "value": "" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nuevo@example.com\",\n  \"password\": \"SecurePass123\",\n  \"firstName\": \"María\",\n  \"lastName\": \"González\",\n  \"numberId\": \"22333444\",\n  \"numberIdType\": \"V\",\n  \"type\": \"client\",\n  \"phone\": \"+584125554444\",\n  \"address\": \"Calle 5, Tovar\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users"]
+            }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"firstName\": \"María José\",\n  \"phone\": \"+584120000000\",\n  \"type\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{clientUserId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "{{clientUserId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/users/{{clientUserId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "users", "{{clientUserId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Products",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+      },
+      "item": [
+        {
+          "name": "List Products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/products?page=1&pageSize=20&active=all&search=&brand={{brandId}}&department={{departmentId}}&storeId={{storeId}}&sort=",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "products"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" },
+                { "key": "active", "value": "all" },
+                { "key": "search", "value": "" },
+                { "key": "brand", "value": "{{brandId}}" },
+                { "key": "department", "value": "{{departmentId}}" },
+                { "key": "storeId", "value": "{{storeId}}" },
+                { "key": "sort", "value": "" }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data && data.data && data.data.length > 0) { pm.collectionVariables.set('productId', data.data[0].id); }",
+                  "pm.test('Status 200', function() { pm.expect(pm.response.code).to.eql(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Product (Multipart)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "code", "value": "PROD-001", "type": "text" },
+                { "key": "name", "value": "Arroz Diana 1kg", "type": "text" },
+                { "key": "brand", "value": "Diana", "type": "text" },
+                { "key": "department", "value": "Granos", "type": "text" },
+                {
+                  "key": "description",
+                  "value": "Arroz blanco de primera calidad",
+                  "type": "text"
+                },
+                { "key": "active", "value": "true", "type": "text" },
+                {
+                  "key": "stores",
+                  "value": "[{\"storeId\":\"{{storeId}}\",\"price\":2.5,\"stockQuantity\":100}]",
+                  "type": "text"
+                },
+                { "key": "image", "src": "/path/to/product-image.jpg", "type": "file" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/products",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "products"]
+            }
+          }
+        },
+        {
+          "name": "Update Product (Multipart)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "brand", "value": "Diana Premium", "type": "text" },
+                {
+                  "key": "description",
+                  "value": "Arroz blanco premium de primera",
+                  "type": "text"
+                },
+                {
+                  "key": "stores",
+                  "value": "[{\"storeId\":\"{{storeId}}\",\"price\":3.0,\"stockQuantity\":150}]",
+                  "type": "text"
+                },
+                { "key": "image", "src": "/path/to/new-image.jpg", "type": "file" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/products/{{productId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "products", "{{productId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Product (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/products/{{productId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "products", "{{productId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Deals",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+      },
+      "item": [
+        {
+          "name": "List Deals",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deals",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "deals"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data && data.data && data.data.length > 0) { pm.collectionVariables.set('dealId', data.data[0].id); }",
+                  "pm.test('Status 200', function() { pm.expect(pm.response.code).to.eql(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Deal (Multipart)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "image", "src": "/path/to/deal-image.jpg", "type": "file" },
+                { "key": "startDate", "value": "2026-06-20", "type": "text" },
+                { "key": "endDate", "value": "2026-06-30", "type": "text" },
+                {
+                  "key": "description",
+                  "value": "Oferta especial de arroz esta semana",
+                  "type": "text"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deals",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "deals"]
+            }
+          }
+        },
+        {
+          "name": "Update Deal (Multipart)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "image", "src": "/path/to/new-deal-image.jpg", "type": "file" },
+                { "key": "endDate", "value": "2026-07-15", "type": "text" },
+                { "key": "description", "value": "Oferta extendida hasta julio", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deals/{{dealId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "deals", "{{dealId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Deal",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/deals/{{dealId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "deals", "{{dealId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin Banners",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{adminToken}}" }]
+      },
+      "item": [
+        {
+          "name": "List Banners",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/banners",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "banners"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data && data.data && data.data.length > 0) { pm.collectionVariables.set('bannerId', data.data[0].id); }",
+                  "pm.test('Status 200', function() { pm.expect(pm.response.code).to.eql(200); });"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Create Banner (Multipart)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "image", "src": "/path/to/banner-image.jpg", "type": "file" },
+                { "key": "active", "value": "true", "type": "text" },
+                { "key": "description", "value": "Banner principal del home", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/banners",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "banners"]
+            }
+          }
+        },
+        {
+          "name": "Update Banner (Multipart)",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                { "key": "image", "src": "/path/to/new-banner.jpg", "type": "file" },
+                { "key": "active", "value": "false", "type": "text" },
+                { "key": "description", "value": "Banner actualizado", "type": "text" }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/banners/{{bannerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "banners", "{{bannerId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete Banner",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/admin/banners/{{bannerId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "admin", "banners", "{{bannerId}}"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "auth": {
+        "type": "bearer",
+        "bearer": [{ "key": "token", "value": "{{accessToken}}" }]
+      },
+      "item": [
+        {
+          "name": "List Notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications?page=1&pageSize=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "pageSize", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark Notification as Read",
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/{{notificationId}}/read",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications", "{{notificationId}}", "read"]
+            }
+          }
+        },
+        {
+          "name": "Mark All as Read",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/notifications/read-all",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "notifications", "read-all"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
