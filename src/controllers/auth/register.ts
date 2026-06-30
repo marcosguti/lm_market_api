@@ -2,8 +2,9 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
-import { signAccessToken } from '../../libs/jwt.js';
+import { signAccessToken, signRefreshToken } from '../../libs/jwt.js';
 import { createHash } from '../../libs/passwordHashing.js';
+import { upsertLinkedDevice } from '../../queries/linkedDevice.js';
 import { createToken } from '../../queries/token.js';
 import { createUser, findUserByEmail, findUserByNumberId } from '../../queries/user.js';
 import { registerSchema } from './schemas.js';
@@ -43,12 +44,21 @@ export async function register(req: AuthRequest, res: Response): Promise<void> {
   });
 
   const accessToken = signAccessToken({ userId: user.id });
+  const refreshToken = signRefreshToken({ userId: user.id });
+  const refreshTokenHash = await createHash(refreshToken);
+  await upsertLinkedDevice({
+    deviceId: body.deviceId,
+    refreshTokenHash,
+    userId: user.id,
+  });
+
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   await createToken({ expirationDate: expiresAt, userId: user.id });
 
   const { password: _p, ...userWithoutPassword } = user;
   res.status(201).json({
     accessToken,
+    refreshToken,
     user: userWithoutPassword,
   });
 }

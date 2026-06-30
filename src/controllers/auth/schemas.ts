@@ -2,6 +2,7 @@ import Joi from 'joi';
 
 export const registerSchema = Joi.object({
   address: Joi.string().allow(''),
+  deviceId: Joi.string().required(),
   email: Joi.string().email().required(),
   firstName: Joi.string().required(),
   lastName: Joi.string().required(),
@@ -20,7 +21,7 @@ export const registerSchema = Joi.object({
 });
 
 export const loginSchema = Joi.object({
-  deviceId: Joi.string().allow(''),
+  deviceId: Joi.string().required(),
   email: Joi.string().email().required(),
   password: Joi.string().required(),
 });
@@ -61,6 +62,6 @@ export const changePasswordSchema = Joi.object({
 });
 
 export const refreshSchema = Joi.object({
-  deviceId: Joi.string().allow(''),
+  deviceId: Joi.string().required(),
   refreshToken: Joi.string().required(),
 });

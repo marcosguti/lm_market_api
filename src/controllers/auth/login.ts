@@ -25,16 +25,13 @@ export async function login(req: Request, res: Response): Promise<void> {
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
   await createToken({ expirationDate: expiresAt, userId: user.id });
 
-  let refreshToken: string | undefined;
-  if (deviceId) {
-    refreshToken = signRefreshToken({ userId: user.id });
-    const refreshTokenHash = await createHash(refreshToken);
-    await upsertLinkedDevice({
-      deviceId,
-      refreshTokenHash,
-      userId: user.id,
-    });
-  }
+  const refreshToken = signRefreshToken({ userId: user.id });
+  const refreshTokenHash = await createHash(refreshToken);
+  await upsertLinkedDevice({
+    deviceId,
+    refreshTokenHash,
+    userId: user.id,
+  });
 
   const { password: _p, ...userWithoutPassword } = user;
   res.json({

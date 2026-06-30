@@ -1,5 +1,6 @@
 import type { LinkedDevice } from '@prisma/client';
 
+import { createHash } from '../libs/passwordHashing.js';
 import prisma from '../prisma.js';
 
 export async function findLinkedDeviceByUserIdAndDeviceId(
@@ -10,6 +11,29 @@ export async function findLinkedDeviceByUserIdAndDeviceId(
     where: {
       userId_deviceId: { deviceId, userId },
     },
+  });
+}
+
+export async function revokeLinkedDevice(userId: string, deviceId: string): Promise<void> {
+  await prisma.linkedDevice
+    .update({
+      data: { refreshTokenHash: `revoked:${Date.now()}` },
+      where: { userId_deviceId: { deviceId, userId } },
+    })
+    .catch(() => {
+      // device may not exist; ignore
+    });
+}
+
+export async function updateLinkedDeviceRefreshTokenHash(
+  userId: string,
+  deviceId: string,
+  newRefreshToken: string,
+): Promise<void> {
+  const hash = await createHash(newRefreshToken);
+  await prisma.linkedDevice.update({
+    data: { refreshTokenHash: hash },
+    where: { userId_deviceId: { deviceId, userId } },
   });
 }
 
