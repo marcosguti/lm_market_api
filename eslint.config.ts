@@ -10,7 +10,15 @@ const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default [
   {
-    ignores: ['dist/**', 'node_modules/**', 'db_data/**', 'saveDB/**', 'loadDB/**'],
+    ignores: [
+      'dist/**',
+      'node_modules/**',
+      'db_data/**',
+      'saveDB/**',
+      'loadDB/**',
+      'src/**/test/**',
+      '**/test/**',
+    ],
   },
   js.configs.recommended,
   eslintPluginN.configs['flat/recommended'],
@@ -21,6 +29,7 @@ export default [
   },
   {
     files: ['src/**/*.ts'],
+    ignores: ['**/test/**'],
     languageOptions: {
       parser: tsParser,
       parserOptions: {

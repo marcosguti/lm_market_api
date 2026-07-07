@@ -8,7 +8,7 @@ import { serializeUser } from './userUtils.js';
 
 export async function listAdminUsers(req: AuthRequest, res: Response): Promise<void> {
   if (!req.userType) {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ error: 'No autorizado' });
     return;
   }
   const validation = listQuerySchema.validate(req.query, { convert: true });

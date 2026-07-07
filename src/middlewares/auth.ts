@@ -58,7 +58,7 @@ export function requireAuth(req: AuthRequest, res: Response, next: () => void): 
   // eslint-disable-next-line no-console
   console.log('[requireAuth]', req.method, req.path, 'userId:', req.userId ?? 'MISSING');
   if (!req.userId) {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ error: 'No autorizado' });
     return;
   }
   next();
@@ -67,11 +67,11 @@ export function requireAuth(req: AuthRequest, res: Response, next: () => void): 
 export function requireRole(allowedTypes: UserType[]) {
   return (req: AuthRequest, res: Response, next: () => void): void => {
     if (!req.userId || !req.userType) {
-      res.status(401).json({ error: 'Unauthorized' });
+      res.status(401).json({ error: 'No autorizado' });
       return;
     }
     if (!allowedTypes.includes(req.userType)) {
-      res.status(403).json({ error: 'Forbidden' });
+      res.status(403).json({ error: 'Acceso denegado' });
       return;
     }
     next();

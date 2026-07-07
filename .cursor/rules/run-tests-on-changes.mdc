@@ -1,0 +1,17 @@
+---
+description: Actualizar y ejecutar tests al modificar código de la API
+alwaysApply: true
+---
+
+# Tests obligatorios en lm_market_api
+
+Cada vez que agregues o modifiques código en este repo (`src/**`):
+
+1. **Actualiza tests** — agrega o ajusta tests en la carpeta `test/` del módulo afectado (ej. `src/services/megasoft/test/`, `src/controllers/orders/test/`). No coloques archivos `*.test.ts` junto al código fuente.
+2. **Corre la suite** antes de dar por terminado el trabajo:
+   - `npm run test` (o `npm run test:watch` durante desarrollo)
+3. **No dejes tests rotos** — si un cambio rompe tests existentes, arréglalos en el mismo cambio.
+4. **RBAC** — si tocas rutas, middlewares o controllers con restricción de rol, actualiza tests en `src/routes/test/` o en el `test/` del módulo correspondiente.
+5. **CI** — el PR no debe mergearse si `npm run lint && npm run test` falla.
+
+Prioridad de cobertura: funciones puras → servicios con mocks → rutas HTTP (Supertest).

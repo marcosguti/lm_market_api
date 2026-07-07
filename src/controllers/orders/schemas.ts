@@ -11,6 +11,7 @@ export const patchLinesSchema = Joi.object({
       }),
     )
     .required(),
+  storeId: Joi.string().trim().uuid().optional(),
 });
 
 export const confirmPaymentSchema = Joi.object({

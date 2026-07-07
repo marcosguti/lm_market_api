@@ -7,7 +7,7 @@ import { handleOrderError } from '../shared/orderHttp.js';
 
 export async function markAllNotificationsRead(req: AuthRequest, res: Response): Promise<void> {
   if (!req.userId) {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ error: 'No autorizado' });
     return;
   }
   try {

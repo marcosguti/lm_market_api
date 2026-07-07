@@ -172,16 +172,24 @@ model Order {
 }
 
 model Payment {
-  id            String        @id @default(uuid())
-  orderId       String        @unique
-  method        PaymentMethod
-  reference     String
-  paidAt        DateTime
-  screenshotUrl String?
-  verifiedAt    DateTime?
-  verifiedBy    String?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  id                    String        @id @default(uuid())
+  orderId               String        @unique
+  method                PaymentMethod
+  reference             String
+  paidAt                DateTime
+  screenshotUrl         String?
+  verifiedAt            DateTime?
+  verifiedBy            String?
+  gatewayControl        String?
+  gatewayStatus         String?
+  gatewayVoucher        String?
+  gatewayRawResponse    Json?
+  verifiedAutomatically Boolean       @default(false)
+  payerCid              String?
+  payerPhone            String?
+  payerBankCode         String?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }

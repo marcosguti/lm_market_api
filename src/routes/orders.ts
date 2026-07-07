@@ -6,6 +6,7 @@ import {
   getOrderById,
   getOrderHistory,
   patchCartLines,
+  verifyMobilePayment,
 } from '../controllers/orders/index.js';
 import { requireAuth } from '../middlewares/auth.js';
 import { paymentScreenshotUploadMiddleware } from '../middlewares/uploadPaymentScreenshot.js';
@@ -22,5 +23,6 @@ router.post(
   paymentScreenshotUploadMiddleware,
   confirmOrderPayment,
 );
+router.post('/:id/verify-mobile-payment', requireAuth, verifyMobilePayment);
 
 export default router;

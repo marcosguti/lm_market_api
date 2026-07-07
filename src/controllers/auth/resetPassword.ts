@@ -18,12 +18,12 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
 
   const resetRecord = await findPasswordResetTokenByToken(token);
   if (!resetRecord) {
-    res.status(400).json({ error: 'Invalid or expired token' });
+    res.status(400).json({ error: 'Token inválido o expirado' });
     return;
   }
   if (new Date() > resetRecord.expiresAt) {
     await deletePasswordResetToken(token);
-    res.status(400).json({ error: 'Invalid or expired token' });
+    res.status(400).json({ error: 'Token inválido o expirado' });
     return;
   }
 
@@ -31,5 +31,5 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
   await updateUserPassword(resetRecord.userId, hashedPassword);
   await deletePasswordResetToken(token);
 
-  res.json({ message: 'Password updated successfully' });
+  res.json({ message: 'Contraseña actualizada correctamente' });
 }

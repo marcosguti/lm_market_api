@@ -12,7 +12,7 @@ import { normalizeDescription, parseMultipartBoolean, updateBannerSchema } from 
 export async function patchAdminBanner(req: AuthRequest, res: Response): Promise<void> {
   const id = getParam(req.params.id);
   if (!id) {
-    res.status(400).json({ error: 'Banner id is required' });
+    res.status(400).json({ error: 'El id del banner es requerido' });
     return;
   }
 

@@ -7,7 +7,7 @@ import { updateProfileSchema } from './schemas.js';
 
 export async function updateProfile(req: AuthRequest, res: Response): Promise<void> {
   if (!req.userId) {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ error: 'No autorizado' });
     return;
   }
   const validation = updateProfileSchema.validate(req.body);

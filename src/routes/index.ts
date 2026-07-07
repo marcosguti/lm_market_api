@@ -13,6 +13,7 @@ import deliveryOrderRoutes from './deliveryOrders.js';
 import departmentRoutes from './departments.js';
 import notificationRoutes from './notifications.js';
 import orderRoutes from './orders.js';
+import paymentRoutes from './payments.js';
 import productRoutes from './products.js';
 import storeRoutes from './stores.js';
 
@@ -28,6 +29,7 @@ export default function setRoutes(app: Express): void {
   app.use('/api/delivery/orders', deliveryOrderRoutes);
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/orders', orderRoutes);
+  app.use('/api/payments', paymentRoutes);
   app.use('/api/stores', storeRoutes);
   app.use('/api/brands', brandRoutes);
   app.use('/api/departments', departmentRoutes);

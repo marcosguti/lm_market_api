@@ -22,11 +22,11 @@ export async function register(req: AuthRequest, res: Response): Promise<void> {
     findUserByNumberId(body.numberId),
   ]);
   if (existingEmail) {
-    res.status(409).json({ error: 'Email already registered' });
+    res.status(409).json({ error: 'Email ya registrado' });
     return;
   }
   if (existingNumberId) {
-    res.status(409).json({ error: 'numberId already registered' });
+    res.status(409).json({ error: 'Cédula ya registrada' });
     return;
   }
 

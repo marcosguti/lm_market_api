@@ -8,7 +8,7 @@ import { changePasswordSchema } from './schemas.js';
 
 export async function changePassword(req: AuthRequest, res: Response): Promise<void> {
   if (!req.userId) {
-    res.status(401).json({ error: 'Unauthorized' });
+    res.status(401).json({ error: 'No autorizado' });
     return;
   }
   const validation = changePasswordSchema.validate(req.body);
@@ -19,10 +19,10 @@ export async function changePassword(req: AuthRequest, res: Response): Promise<v
   const { currentPassword, newPassword } = validation.value;
   const user = await findUserById(req.userId);
   if (!user || !(await comparePassword(currentPassword, user.password))) {
-    res.status(400).json({ error: 'Current password is incorrect' });
+    res.status(400).json({ error: 'La contraseña actual es incorrecta' });
     return;
   }
   const hashedPassword = await createHash(newPassword);
   await updateUserPassword(req.userId, hashedPassword);
-  res.json({ message: 'Password updated successfully' });
+  res.json({ message: 'Contraseña actualizada correctamente' });
 }

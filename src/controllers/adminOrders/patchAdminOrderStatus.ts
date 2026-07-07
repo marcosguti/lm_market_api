@@ -14,13 +14,14 @@ import {
   createOrderStatusNotification,
   getAnyOrderById,
 } from '../../services/orderService.js';
+import { formatOrderStatusChangeBody } from '../../utils/orderStatusLabels.js';
 import { getParam, handleOrderError } from '../shared/orderHttp.js';
 import { patchStatusSchema } from './schemas.js';
 
 export async function patchAdminOrderStatus(req: AuthRequest, res: Response): Promise<void> {
   const orderId = getParam(req.params.id);
   if (!orderId) {
-    res.status(400).json({ error: 'Order id is required' });
+    res.status(400).json({ error: 'El id del pedido es requerido' });
     return;
   }
   const validation = patchStatusSchema.validate(req.body);
@@ -32,7 +33,7 @@ export async function patchAdminOrderStatus(req: AuthRequest, res: Response): Pr
   try {
     const before = await getAnyOrderById(orderId);
     if (!before) {
-      res.status(404).json({ error: 'Order not found' });
+      res.status(404).json({ error: 'Pedido no encontrado' });
       return;
     }
 
@@ -40,8 +41,10 @@ export async function patchAdminOrderStatus(req: AuthRequest, res: Response): Pr
     const updated = await adminSetOrderStatus(orderId, nextStatus);
     await createOrderStatusNotification(updated, before.status as OrderStatus);
     emitUserNotification(updated.userId, {
-      body: `Tu orden cambió de ${before.status} a ${updated.status}`,
+      body: formatOrderStatusChangeBody(before.status, updated.status),
+      newStatus: updated.status,
       orderId: updated.id,
+      previousStatus: before.status,
       status: updated.status,
       title: 'Actualización de orden',
       type: 'ORDER_STATUS_CHANGED',

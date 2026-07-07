@@ -10,7 +10,11 @@ export async function getCart(req: AuthRequest, res: Response): Promise<void> {
   const userId = asClient(req, res);
   if (!userId) return;
   try {
-    const result = await ensurePendingCart(userId);
+    const storeId =
+      typeof req.query.storeId === 'string' && req.query.storeId.trim()
+        ? req.query.storeId.trim()
+        : undefined;
+    const result = await ensurePendingCart(userId, storeId);
     res.json(result);
   } catch (err) {
     handleOrderError(err, res);

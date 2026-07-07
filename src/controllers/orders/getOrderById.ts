@@ -11,7 +11,7 @@ export async function getOrderById(req: AuthRequest, res: Response): Promise<voi
   if (!userId) return;
   const orderId = getParam(req.params.id);
   if (!orderId) {
-    res.status(400).json({ error: 'Order id is required' });
+    res.status(400).json({ error: 'El id del pedido es requerido' });
     return;
   }
   try {

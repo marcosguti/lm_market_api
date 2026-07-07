@@ -1,4 +1,3 @@
-import { Prisma } from '@prisma/client';
 import { randomUUID } from 'crypto';
 
 import prisma from '../prisma.js';
@@ -12,18 +11,18 @@ import {
 import { findProductByCode, upsertProductStore } from '../queries/product.js';
 import { findStores } from '../queries/store.js';
 
-/** Máximo admitido por el API de productos externos */
+/** Max page size supported by the external products API */
 const SYNC_FETCH_PAGE_SIZE = 500;
 const MAX_INT32 = 2_147_483_647;
 
 export interface ExternalProductRow {
-  codigo: string;
-  costo: number;
-  departamento: string;
-  descripcion: string;
-  existencia: number;
-  marca: string;
-  precio: number;
+  brand: string;
+  code: string;
+  cost: number;
+  department: string;
+  description: string;
+  price: number;
+  stock: number;
 }
 
 export interface ExternalProductSearchResponse {
@@ -65,13 +64,13 @@ export function extractProductRows(body: unknown): ExternalProductRow[] {
   return raw.map((item) => {
     const row = item as Record<string, unknown>;
     return {
-      codigo: String(row.codigo ?? row.codigoInterno ?? '').trim(),
-      costo: Number(row.costo ?? 0),
-      departamento: String(row.departamento ?? row.department ?? '').trim(),
-      descripcion: String(row.descripcion ?? '').trim(),
-      existencia: parseStockQuantity(row.existencia ?? row.existenciaTotal),
-      marca: String(row.marca ?? row.brand ?? '').trim(),
-      precio: parseSyncPrice(row.precio),
+      brand: String(row.marca ?? row.brand ?? '').trim(),
+      code: String(row.codigo ?? row.codigoInterno ?? '').trim(),
+      cost: Number(row.costo ?? 0),
+      department: String(row.departamento ?? row.department ?? '').trim(),
+      description: String(row.descripcion ?? '').trim(),
+      price: parseSyncPrice(row.precio),
+      stock: parseStockQuantity(row.existencia ?? row.existenciaTotal),
     };
   });
 }
@@ -101,11 +100,39 @@ export async function syncExternalProducts(): Promise<void> {
   console.log('[product-sync] === All stores synced ===');
 }
 
+async function deactivateStaleProducts(storeId: string, sourceCodes: Set<string>): Promise<number> {
+  const sourceCodesList = Array.from(sourceCodes);
+
+  const { count } = await prisma.product.updateMany({
+    data: { active: false },
+    where: {
+      active: true,
+      code: { notIn: sourceCodesList },
+      productStores: { some: { storeId } },
+    },
+  });
+
+  return count;
+}
+
 function getSyncBaseUrl(): string {
   return (
     process.env.EXTERNAL_PRODUCTS_BASE_URL?.trim() ||
     'https://lmmarket.leandatech.com/api/productos/full-search'
   );
+}
+
+function isSyncComplete(params: {
+  lastProcessedPage: number;
+  pageErrors: number;
+  sourceCodeCount: number;
+  totalPages: number;
+}): boolean {
+  const { lastProcessedPage, pageErrors, sourceCodeCount, totalPages } = params;
+  if (sourceCodeCount === 0) return false;
+  if (pageErrors > 0) return false;
+  if (lastProcessedPage < totalPages) return false;
+  return true;
 }
 
 function parseStockQuantity(raw: unknown): number {
@@ -177,26 +204,33 @@ async function syncProductRow(
   ctx: {
     brandCache: Map<string, string>;
     departmentCache: Map<string, string>;
+    inStockCodes: Set<string>;
     sourceCodes: Set<string>;
     storeId: string;
   },
 ): Promise<'skipped_no_code' | 'synced'> {
-  const code = row.codigo;
+  const code = row.code;
   if (!code) return 'skipped_no_code';
 
   ctx.sourceCodes.add(code);
+  if (row.stock > 0) {
+    ctx.inStockCodes.add(code);
+  }
 
   const existing = await findProductByCode(code);
   if (existing) {
-    await upsertProductStore(existing.id, ctx.storeId, row.precio, row.existencia);
+    await upsertProductStore(existing.id, ctx.storeId, row.price, row.stock);
+    if (row.stock > 0 && !existing.active) {
+      await prisma.product.update({ data: { active: true }, where: { id: existing.id } });
+    }
     return 'synced';
   }
 
-  const brandId = await resolveBrandId(row.marca, ctx.brandCache);
-  const departmentId = await resolveDepartmentId(row.departamento, ctx.departmentCache);
-  const description = row.descripcion;
-  const brandName = normalizeCatalogName(row.marca);
-  const departmentName = normalizeCatalogName(row.departamento);
+  const brandId = await resolveBrandId(row.brand, ctx.brandCache);
+  const departmentId = await resolveDepartmentId(row.department, ctx.departmentCache);
+  const description = row.description;
+  const brandName = normalizeCatalogName(row.brand);
+  const departmentName = normalizeCatalogName(row.department);
 
   const product = await prisma.product.create({
     data: {
@@ -212,7 +246,7 @@ async function syncProductRow(
     },
   });
 
-  await upsertProductStore(product.id, ctx.storeId, row.precio, row.existencia);
+  await upsertProductStore(product.id, ctx.storeId, row.price, row.stock);
   return 'synced';
 }
 
@@ -229,6 +263,7 @@ async function syncStore(storeId: string, storeName: string, branch: number): Pr
   let rowErrors = 0;
   let pageErrors = 0;
   const sourceCodes = new Set<string>();
+  const inStockCodes = new Set<string>();
 
   while (page <= totalPages) {
     try {
@@ -290,6 +325,7 @@ async function syncStore(storeId: string, storeName: string, branch: number): Pr
           const processed = await syncProductRow(row, {
             brandCache,
             departmentCache,
+            inStockCodes,
             sourceCodes,
             storeId,
           });
@@ -303,7 +339,7 @@ async function syncStore(storeId: string, storeName: string, branch: number): Pr
         } catch (err) {
           rowErrors += 1;
           console.error(
-            `[product-sync] Store: ${storeName} (branch=${branch}) - row ${row.codigo || '?'} failed:`,
+            `[product-sync] Store: ${storeName} (branch=${branch}) - row ${row.code || '?'} failed:`,
             err,
           );
         }
@@ -330,27 +366,26 @@ async function syncStore(storeId: string, storeName: string, branch: number): Pr
     page += 1;
   }
 
-  // Deactivate products not in this store's source
-  const sourceCodesList = Array.from(sourceCodes);
-  const deactivateWhere: Prisma.ProductWhereInput =
-    sourceCodesList.length > 0
-      ? {
-          active: true,
-          code: { notIn: sourceCodesList },
-          productStores: { some: { storeId } },
-        }
-      : {
-          active: true,
-          productStores: { some: { storeId } },
-        };
-
-  const { count: deactivated } = await prisma.product.updateMany({
-    data: { active: false },
-    where: deactivateWhere,
+  const syncComplete = isSyncComplete({
+    lastProcessedPage,
+    pageErrors,
+    sourceCodeCount: sourceCodes.size,
+    totalPages,
   });
+
+  let deactivated = 0;
+
+  if (!syncComplete) {
+    // eslint-disable-next-line no-console -- sync diagnostics
+    console.warn(
+      `[product-sync] Store: ${storeName} (branch=${branch}) - skipping deactivation (incomplete sync: sourceCodes=${sourceCodes.size}, inStock=${inStockCodes.size}, páginas=${lastProcessedPage}/${totalPages}, erroresPágina=${pageErrors})`,
+    );
+  } else {
+    deactivated = await deactivateStaleProducts(storeId, sourceCodes);
+  }
 
   // eslint-disable-next-line no-console -- sync diagnostics
   console.log(
-    `[product-sync] Store: ${storeName} (branch=${branch}) - done: upserted=${upserted}, sinCódigo=${skippedWithoutCode}, desactivados=${deactivated}, páginas=${lastProcessedPage}/${totalPages}, erroresPágina=${pageErrors}, erroresFila=${rowErrors}`,
+    `[product-sync] Store: ${storeName} (branch=${branch}) - done: upserted=${upserted}, sinCódigo=${skippedWithoutCode}, conExistencia=${inStockCodes.size}, desactivados=${deactivated}, páginas=${lastProcessedPage}/${totalPages}, erroresPágina=${pageErrors}, erroresFila=${rowErrors}`,
   );
 }

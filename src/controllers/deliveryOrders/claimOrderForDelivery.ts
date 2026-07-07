@@ -8,12 +8,13 @@ import {
   createOrderStatusNotification,
   getAnyOrderById,
 } from '../../services/orderService.js';
+import { formatOrderStatusChangeBody } from '../../utils/orderStatusLabels.js';
 import { getParam, handleOrderError } from '../shared/orderHttp.js';
 
 export async function claimOrderForDelivery(req: AuthRequest, res: Response): Promise<void> {
   const orderId = getParam(req.params.id);
   if (!orderId || !req.userId) {
-    res.status(400).json({ error: 'Order id is required' });
+    res.status(400).json({ error: 'El id del pedido es requerido' });
     return;
   }
   try {
@@ -22,8 +23,10 @@ export async function claimOrderForDelivery(req: AuthRequest, res: Response): Pr
     if (before) {
       await createOrderStatusNotification(updated, before.status);
       emitUserNotification(updated.userId, {
-        body: `Tu orden cambió de ${before.status} a ${updated.status}`,
+        body: formatOrderStatusChangeBody(before.status, updated.status),
+        newStatus: updated.status,
         orderId: updated.id,
+        previousStatus: before.status,
         status: updated.status,
         title: 'Actualización de orden',
         type: 'ORDER_STATUS_CHANGED',

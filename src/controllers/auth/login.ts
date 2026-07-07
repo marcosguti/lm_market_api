@@ -17,7 +17,7 @@ export async function login(req: Request, res: Response): Promise<void> {
 
   const user = await findUserByEmail(email);
   if (!user || !(await comparePassword(password, user.password))) {
-    res.status(401).json({ error: 'Invalid email or password' });
+    res.status(401).json({ error: 'Email o contraseña inválidos' });
     return;
   }
 

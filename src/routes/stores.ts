@@ -10,7 +10,7 @@ router.get('/', async (_req, res) => {
     res.json(stores);
   } catch (e) {
     console.error('[stores] get failed', e);
-    res.status(500).json({ error: 'Failed to fetch stores' });
+    res.status(500).json({ error: 'Error al obtener las tiendas' });
   }
 });
 

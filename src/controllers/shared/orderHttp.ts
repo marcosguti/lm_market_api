@@ -16,5 +16,5 @@ export function handleOrderError(err: unknown, res: Response): void {
     });
     return;
   }
-  res.status(500).json({ error: 'Unexpected server error' });
+  res.status(500).json({ error: 'Error inesperado del servidor' });
 }

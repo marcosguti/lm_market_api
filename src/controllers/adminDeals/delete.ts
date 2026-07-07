@@ -8,7 +8,7 @@ import { getParam } from '../shared/orderHttp.js';
 export async function deleteAdminDeal(req: AuthRequest, res: Response): Promise<void> {
   const id = getParam(req.params.id);
   if (!id) {
-    res.status(400).json({ error: 'Deal id is required' });
+    res.status(400).json({ error: 'El id de la oferta es requerido' });
     return;
   }
 

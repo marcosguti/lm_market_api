@@ -16,12 +16,12 @@ export async function createAdminUser(req: AuthRequest, res: Response): Promise<
   const body = validation.value;
   const existingEmail = await findUserByEmail(body.email);
   if (existingEmail) {
-    res.status(409).json({ error: 'Email already registered' });
+    res.status(409).json({ error: 'Email ya registrado' });
     return;
   }
   const existingNumberId = await findUserByNumberId(body.numberId);
   if (existingNumberId) {
-    res.status(409).json({ error: 'numberId already registered' });
+    res.status(409).json({ error: 'Cédula ya registrada' });
     return;
   }
 
@@ -47,7 +47,7 @@ export async function createAdminUser(req: AuthRequest, res: Response): Promise<
     });
   } catch (err) {
     if (isPrismaUniqueError(err)) {
-      res.status(409).json({ error: 'Email or numberId already exists' });
+      res.status(409).json({ error: 'El email o la cédula ya existe' });
       return;
     }
     throw err;

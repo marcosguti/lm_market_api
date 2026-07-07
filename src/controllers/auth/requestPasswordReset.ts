@@ -22,6 +22,6 @@ export async function requestPasswordReset(req: Request, res: Response): Promise
   }
 
   res.json({
-    message: 'If the email exists, you will receive instructions to reset your password.',
+    message: 'Si el email existe, recibirás instrucciones para restablecer tu contraseña.',
   });
 }

@@ -18,12 +18,17 @@ export async function patchCartLines(req: AuthRequest, res: Response): Promise<v
   }
   const orderId = getParam(req.params.id);
   if (!orderId) {
-    res.status(400).json({ error: 'Order id is required' });
+    res.status(400).json({ error: 'El id del pedido es requerido' });
     return;
   }
 
   try {
-    const result = await updatePendingOrderLines(userId, orderId, validation.value.lines);
+    const result = await updatePendingOrderLines(
+      userId,
+      orderId,
+      validation.value.lines,
+      validation.value.storeId,
+    );
     res.json(result);
   } catch (err) {
     handleOrderError(err, res);

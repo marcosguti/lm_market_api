@@ -1,5 +1,5 @@
 {
-  "exec": "tsc --noEmit && eslint . && tsx src/app.ts",
+  "exec": "tsc --noEmit && eslint src && tsx src/app.ts",
   "ext": "ts,json",
   "watch": ["src"]
 }

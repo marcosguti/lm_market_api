@@ -23,13 +23,13 @@ export async function patchAdminProduct(req: AuthRequest, res: Response): Promis
   }
   const id = typeof req.params.id === 'string' ? req.params.id : req.params.id?.[0];
   if (!id) {
-    res.status(400).json({ error: 'Invalid product id' });
+    res.status(400).json({ error: 'Id de producto inválido' });
     return;
   }
 
   const existing = await findProductById(id);
   if (!existing) {
-    res.status(404).json({ error: 'Product not found' });
+    res.status(404).json({ error: 'Producto no encontrado' });
     return;
   }
 
@@ -79,6 +79,6 @@ export async function patchAdminProduct(req: AuthRequest, res: Response): Promis
     res.json({ product: serializeAdminProduct(refreshed!) });
   } catch (e) {
     console.error('[admin-products] stack:', (e as Error).stack);
-    res.status(500).json({ error: 'Failed to update product' });
+    res.status(500).json({ error: 'Error al actualizar el producto' });
   }
 }

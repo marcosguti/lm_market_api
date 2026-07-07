@@ -30,7 +30,7 @@ export async function createAdminProduct(req: AuthRequest, res: Response): Promi
 
   const existing = await findProductByCode(body.code);
   if (existing) {
-    res.status(409).json({ error: 'Product code already exists' });
+    res.status(409).json({ error: 'El código del producto ya existe' });
     return;
   }
 
@@ -75,6 +75,6 @@ export async function createAdminProduct(req: AuthRequest, res: Response): Promi
     res.status(201).json({ product: serializeAdminProduct(refreshed!) });
   } catch (e) {
     console.error('[admin-products] create failed', e);
-    res.status(500).json({ error: 'Failed to create product' });
+    res.status(500).json({ error: 'Error al crear el producto' });
   }
 }

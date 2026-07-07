@@ -2,28 +2,29 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
-import { asClient } from '../orders/asClient.js';
 import { getParam } from '../shared/orderHttp.js';
 
 export async function verifyPayment(req: AuthRequest, res: Response): Promise<void> {
-  const clientId = asClient(req, res);
-  if (!clientId) return;
+  if (!req.userId) {
+    res.status(401).json({ error: 'No autorizado' });
+    return;
+  }
 
   const orderId = getParam(req.params.id);
   if (!orderId) {
-    res.status(400).json({ error: 'Order id is required' });
+    res.status(400).json({ error: 'El id del pedido es requerido' });
     return;
   }
 
   const { verify } = req.body as { verify?: boolean };
   if (typeof verify !== 'boolean') {
-    res.status(400).json({ error: 'verify must be a boolean' });
+    res.status(400).json({ error: 'verify debe ser un booleano' });
     return;
   }
 
   try {
     const { verifyPaymentByAdmin } = await import('../../services/orderService.js');
-    const order = await verifyPaymentByAdmin(orderId, clientId, verify);
+    const order = await verifyPaymentByAdmin(orderId, req.userId, verify);
     res.json({ order });
   } catch (err) {
     const { handleOrderError } = await import('../shared/orderHttp.js');

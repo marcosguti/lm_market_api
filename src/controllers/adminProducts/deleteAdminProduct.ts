@@ -8,16 +8,16 @@ import { serializeAdminProduct } from './serializeAdminProduct.js';
 export async function deleteAdminProduct(req: AuthRequest, res: Response): Promise<void> {
   const id = typeof req.params.id === 'string' ? req.params.id : req.params.id?.[0];
   if (!id) {
-    res.status(400).json({ error: 'Invalid product id' });
+    res.status(400).json({ error: 'Id de producto inválido' });
     return;
   }
 
   const existing = await findProductById(id);
   if (!existing) {
-    res.status(404).json({ error: 'Product not found' });
+    res.status(404).json({ error: 'Producto no encontrado' });
     return;
   }
 
   const product = await deactivateProductById(id);
-  res.json({ message: 'Product deactivated', product: serializeAdminProduct(product) });
+  res.json({ message: 'Producto desactivado', product: serializeAdminProduct(product) });
 }

@@ -4,8 +4,12 @@ import { v4 as uuidv4 } from 'uuid';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { megasoftConfig } from '../../config/megasoft.js';
 import { uploadPaymentScreenshot } from '../../libs/filesInDigitalOcean/index.js';
-import { confirmPendingOrderPaymentWithDetails } from '../../services/orderService.js';
+import {
+  confirmPendingOrderPaymentWithDetails,
+  notifyOrderPaid,
+} from '../../services/orderService.js';
 import { getParam, handleOrderError } from '../shared/orderHttp.js';
 import { asClient } from './asClient.js';
 import { confirmPaymentSchema } from './schemas.js';
@@ -16,7 +20,7 @@ export async function confirmOrderPayment(req: AuthRequest, res: Response): Prom
 
   const orderId = getParam(req.params.id);
   if (!orderId) {
-    res.status(400).json({ error: 'Order id is required' });
+    res.status(400).json({ error: 'El id del pedido es requerido' });
     return;
   }
 
@@ -30,6 +34,14 @@ export async function confirmOrderPayment(req: AuthRequest, res: Response): Prom
   const validation = confirmPaymentSchema.validate({ method, paidAt, reference });
   if (validation.error) {
     res.status(400).json({ error: validation.error.message });
+    return;
+  }
+
+  if (validation.value.method === 'mobilePayment' && megasoftConfig.enabled) {
+    res.status(400).json({
+      code: 'USE_MOBILE_VERIFY',
+      error: 'Use el endpoint de verificación automática de pago móvil',
+    });
     return;
   }
 
@@ -66,6 +78,8 @@ export async function confirmOrderPayment(req: AuthRequest, res: Response): Prom
       reference: isCash ? null : (validation.value.reference ?? null),
       screenshotUrl,
     });
+
+    await notifyOrderPaid(result.order);
 
     res.json(result);
   } catch (err) {

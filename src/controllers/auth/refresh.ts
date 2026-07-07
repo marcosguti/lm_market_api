@@ -24,13 +24,13 @@ export async function refresh(req: Request, res: Response): Promise<void> {
   try {
     payload = verifyToken(refreshToken);
   } catch {
-    res.status(401).json({ error: 'Invalid refresh token' });
+    res.status(401).json({ error: 'Token de refresco inválido' });
     return;
   }
 
   const linked = await findLinkedDeviceByUserIdAndDeviceId(payload.userId, deviceId);
   if (!linked) {
-    res.status(401).json({ error: 'Invalid device or refresh token' });
+    res.status(401).json({ error: 'Dispositivo o token de refresco inválido' });
     return;
   }
 
@@ -38,7 +38,7 @@ export async function refresh(req: Request, res: Response): Promise<void> {
   // incoming token, an attacker may be trying to use a stolen token after
   // a legitimate rotation. Revoke the entire device chain.
   if (linked.refreshTokenHash.startsWith(REVOKED_PREFIX)) {
-    res.status(401).json({ error: 'Refresh token revoked' });
+    res.status(401).json({ error: 'Token de refresco revocado' });
     return;
   }
 
@@ -47,7 +47,7 @@ export async function refresh(req: Request, res: Response): Promise<void> {
     // Token mismatch: probable reuse of an old, already-rotated refresh token.
     // Revoke the whole device to invalidate any other outstanding tokens.
     await revokeLinkedDevice(payload.userId, deviceId);
-    res.status(401).json({ error: 'Invalid refresh token' });
+    res.status(401).json({ error: 'Token de refresco inválido' });
     return;
   }
 
