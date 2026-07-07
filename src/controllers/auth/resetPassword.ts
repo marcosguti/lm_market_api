@@ -1,6 +1,7 @@
 import type { Request, Response } from 'express';
 
 import { createHash } from '../../libs/passwordHashing.js';
+import { revokeAllLinkedDevicesForUser } from '../../queries/linkedDevice.js';
 import {
   deletePasswordResetToken,
   findPasswordResetTokenByToken,
@@ -30,6 +31,7 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
   const hashedPassword = await createHash(newPassword);
   await updateUserPassword(resetRecord.userId, hashedPassword);
   await deletePasswordResetToken(token);
+  await revokeAllLinkedDevicesForUser(resetRecord.userId);
 
   res.json({ message: 'Contraseña actualizada correctamente' });
 }

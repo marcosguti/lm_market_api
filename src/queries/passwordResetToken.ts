@@ -22,6 +22,12 @@ export async function deletePasswordResetToken(token: string): Promise<void> {
   });
 }
 
+export async function deletePasswordResetTokensByUserId(userId: string): Promise<void> {
+  await prisma.passwordResetToken.deleteMany({
+    where: { userId },
+  });
+}
+
 export async function findPasswordResetTokenByToken(
   token: string,
 ): Promise<null | PasswordResetToken> {

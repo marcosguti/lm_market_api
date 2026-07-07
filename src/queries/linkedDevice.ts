@@ -14,6 +14,13 @@ export async function findLinkedDeviceByUserIdAndDeviceId(
   });
 }
 
+export async function revokeAllLinkedDevicesForUser(userId: string): Promise<void> {
+  await prisma.linkedDevice.updateMany({
+    data: { refreshTokenHash: `revoked:${Date.now()}` },
+    where: { userId },
+  });
+}
+
 export async function revokeLinkedDevice(userId: string, deviceId: string): Promise<void> {
   await prisma.linkedDevice
     .update({

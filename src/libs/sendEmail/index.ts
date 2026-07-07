@@ -1,0 +1,146 @@
+import Mailjet from 'node-mailjet';
+
+import { getPasswordResetTemplate } from './templates/passwordReset.js';
+
+type MailjetApi = {
+  apiConnect: (apiKey: string, apiSecret: string) => MailjetClient;
+};
+
+type MailjetClient = {
+  post: (
+    resource: string,
+    config?: { version: string },
+  ) => { request: (body: unknown) => Promise<MailjetSendResult> };
+};
+
+type MailjetConfig = {
+  apiKey: string;
+  apiSecret: string;
+  fromEmail: string;
+  fromName: string;
+};
+
+type MailjetSendBody = {
+  Messages?: Array<{
+    Errors?: unknown[];
+    MessageID?: number;
+    Status?: string;
+  }>;
+};
+
+type MailjetSendResult = {
+  body?: MailjetSendBody;
+  response?: { status?: number };
+};
+
+const assertMailjetConfig = (): MailjetConfig => {
+  const apiKey = process.env.MAILJET_API_KEY?.trim();
+  const apiSecret = process.env.MAILJET_SECRET_KEY?.trim();
+  const fromEmail = process.env.MAIL_FROM_EMAIL?.trim();
+  const fromName = process.env.MAIL_FROM_NAME?.trim() || 'LM Market';
+
+  if (!apiKey) {
+    throw new Error('[mailjet] Missing MAILJET_API_KEY in .env');
+  }
+  if (!apiSecret) {
+    throw new Error('[mailjet] Missing MAILJET_SECRET_KEY in .env');
+  }
+  if (!fromEmail) {
+    throw new Error('[mailjet] Missing MAIL_FROM_EMAIL in .env');
+  }
+
+  return { apiKey, apiSecret, fromEmail, fromName };
+};
+
+const getMailjetClient = (): MailjetClient => {
+  const { apiKey, apiSecret } = assertMailjetConfig();
+  return (Mailjet as unknown as MailjetApi).apiConnect(apiKey, apiSecret);
+};
+
+const maskResetUrl = (resetUrl: string): string => {
+  try {
+    const url = new URL(resetUrl);
+    const token = url.searchParams.get('token');
+    if (!token) return resetUrl;
+    const masked = token.length <= 4 ? '***' : `***${token.slice(-4)}`;
+    url.searchParams.set('token', masked);
+    return url.toString();
+  } catch {
+    return resetUrl.replace(/token=[^&]+/, 'token=***');
+  }
+};
+
+const logMailjetSendFailure = (err: unknown): void => {
+  if (err && typeof err === 'object') {
+    const error = err as {
+      message?: string;
+      response?: { body?: unknown; status?: number };
+      statusCode?: number;
+    };
+    console.error('[mailjet] send failed', {
+      body: error.response?.body,
+      message: error.message,
+      status: error.response?.status ?? error.statusCode,
+    });
+    return;
+  }
+  console.error('[mailjet] send failed', err);
+};
+
+export const sendPasswordResetEmail = async ({
+  email,
+  firstName,
+  resetUrl,
+  ttlHours,
+}: {
+  email: string;
+  firstName: string;
+  resetUrl: string;
+  ttlHours: number;
+}): Promise<void> => {
+  const { fromEmail, fromName } = assertMailjetConfig();
+  const mailjet = getMailjetClient();
+
+  const payload = {
+    Messages: [
+      {
+        From: {
+          Email: fromEmail,
+          Name: fromName,
+        },
+        HTMLPart: getPasswordResetTemplate({ firstName, resetUrl, ttlHours }),
+        Subject: 'Restablece tu contraseña — LM Market',
+        To: [{ Email: email }],
+      },
+    ],
+  };
+
+  // eslint-disable-next-line no-console
+  console.info('[mailjet] sending password reset', {
+    from: fromEmail,
+    resetUrl: maskResetUrl(resetUrl),
+    to: email,
+  });
+
+  try {
+    const response = await mailjet.post('send', { version: 'v3.1' }).request(payload);
+    const message = response.body?.Messages?.[0];
+    const status = message?.Status;
+
+    // eslint-disable-next-line no-console
+    console.info('[mailjet] send response', {
+      errors: message?.Errors,
+      messageId: message?.MessageID,
+      status,
+    });
+
+    if (status !== 'success') {
+      throw new Error(
+        `Mailjet status: ${status ?? 'unknown'} - ${JSON.stringify(message?.Errors ?? response.body)}`,
+      );
+    }
+  } catch (err) {
+    logMailjetSendFailure(err);
+    throw err;
+  }
+};
