@@ -1,11 +1,16 @@
 import Joi from 'joi';
 
+import { personNameSchema } from '../../utils/personName.js';
+import { phoneSchema } from '../../utils/phone.js';
+
+const normalizedEmailSchema = Joi.string().email().trim().lowercase().required();
+
 export const registerSchema = Joi.object({
   address: Joi.string().allow(''),
-  deviceId: Joi.string().required(),
-  email: Joi.string().email().required(),
-  firstName: Joi.string().required(),
-  lastName: Joi.string().required(),
+  deviceId: Joi.string().optional(),
+  email: normalizedEmailSchema,
+  firstName: personNameSchema.required(),
+  lastName: personNameSchema.required(),
   numberId: Joi.string().required(),
   numberIdType: Joi.string().valid('V', 'E', 'P', 'J').required(),
   password: Joi.string()
@@ -16,18 +21,48 @@ export const registerSchema = Joi.object({
       'string.min': 'La contraseña debe tener al menos 8 caracteres',
       'string.pattern.base': 'La contraseña debe contener mayúsculas, minúsculas y números',
     }),
-  phone: Joi.string().allow(''),
+  phone: phoneSchema,
   type: Joi.string().valid('client', 'admin', 'deliveryDriver').default('client'),
 });
 
 export const loginSchema = Joi.object({
   deviceId: Joi.string().required(),
-  email: Joi.string().email().required(),
+  email: normalizedEmailSchema,
   password: Joi.string().required(),
 });
 
+export const sendVerificationCodeSchema = Joi.object({
+  email: normalizedEmailSchema,
+});
+
+export const verifyEmailSchema = Joi.object({
+  code: Joi.string()
+    .pattern(/^\d{4}$/)
+    .required()
+    .messages({
+      'string.pattern.base': 'El código debe tener 4 dígitos',
+    }),
+  deviceId: Joi.string().required(),
+  email: normalizedEmailSchema,
+});
+
+export const sendLoginCodeSchema = Joi.object({
+  email: normalizedEmailSchema,
+});
+
+export const verifyLoginCodeSchema = Joi.object({
+  code: Joi.string()
+    .pattern(/^\d{4}$/)
+    .required()
+    .messages({
+      'string.pattern.base': 'El código debe tener 4 dígitos',
+    }),
+  deviceId: Joi.string().required(),
+  email: normalizedEmailSchema,
+});
+
 export const requestResetSchema = Joi.object({
-  email: Joi.string().email().required(),
+  email: normalizedEmailSchema,
 });
 
 export const resetPasswordSchema = Joi.object({
@@ -42,11 +77,15 @@ export const resetPasswordSchema = Joi.object({
   token: Joi.string().required(),
 });
 
+export const validatePasswordResetTokenSchema = Joi.object({
+  token: Joi.string().required(),
+}).options({ convert: true });
+
 export const updateProfileSchema = Joi.object({
   address: Joi.string().allow('').optional(),
   firstName: Joi.string().optional(),
   lastName: Joi.string().optional(),
-  phone: Joi.string().allow('').optional(),
+  phone: phoneSchema.optional(),
 });
 
 export const changePasswordSchema = Joi.object({

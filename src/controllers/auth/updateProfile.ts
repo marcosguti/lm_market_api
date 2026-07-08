@@ -2,7 +2,7 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
-import { updateUser } from '../../queries/user.js';
+import { findUserByPhone, updateUser } from '../../queries/user.js';
 import { updateProfileSchema } from './schemas.js';
 
 export async function updateProfile(req: AuthRequest, res: Response): Promise<void> {
@@ -16,6 +16,15 @@ export async function updateProfile(req: AuthRequest, res: Response): Promise<vo
     return;
   }
   const body = validation.value;
+
+  if (body.phone) {
+    const existingPhone = await findUserByPhone(body.phone);
+    if (existingPhone && existingPhone.id !== req.userId) {
+      res.status(409).json({ error: 'Teléfono ya registrado' });
+      return;
+    }
+  }
+
   const user = await updateUser(req.userId, {
     address: body.address,
     firstName: body.firstName,

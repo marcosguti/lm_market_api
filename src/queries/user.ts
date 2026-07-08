@@ -10,6 +10,7 @@ export async function countSuperAdminUsers(): Promise<number> {
 export async function createUser(data: {
   address?: string;
   email: string;
+  emailVerified?: boolean;
   firstName: string;
   lastName: string;
   numberId: string;
@@ -22,6 +23,7 @@ export async function createUser(data: {
     data: {
       address: data.address,
       email: data.email,
+      emailVerified: data.emailVerified ?? false,
       firstName: data.firstName,
       lastName: data.lastName,
       numberId: data.numberId,
@@ -52,6 +54,12 @@ export async function findUserById(id: string): Promise<null | User> {
 export async function findUserByNumberId(numberId: string): Promise<null | User> {
   return prisma.user.findUnique({
     where: { numberId },
+  });
+}
+
+export async function findUserByPhone(phone: string): Promise<null | User> {
+  return prisma.user.findUnique({
+    where: { phone },
   });
 }
 

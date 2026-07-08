@@ -5,6 +5,7 @@ import {
   deleteAdminUser,
   listAdminUsers,
   patchAdminUser,
+  verifyAdminUserEmail,
 } from '../controllers/adminUsers/index.js';
 import { requireAuth, requireRole } from '../middlewares/auth.js';
 
@@ -16,6 +17,7 @@ router.use(requireRole(['admin', 'superAdmin']));
 router.get('/', listAdminUsers);
 router.post('/', createAdminUser);
 router.patch('/:id', patchAdminUser);
+router.post('/:id/verify-email', verifyAdminUserEmail);
 router.delete('/:id', deleteAdminUser);
 
 export default router;

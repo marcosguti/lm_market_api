@@ -2,11 +2,12 @@ import type { Request, Response } from 'express';
 
 import { createHash } from '../../libs/passwordHashing.js';
 import { revokeAllLinkedDevicesForUser } from '../../queries/linkedDevice.js';
-import {
-  deletePasswordResetToken,
-  findPasswordResetTokenByToken,
-} from '../../queries/passwordResetToken.js';
+import { deletePasswordResetToken } from '../../queries/passwordResetToken.js';
 import { updateUserPassword } from '../../queries/user.js';
+import {
+  passwordResetTokenErrorMessage,
+  validatePasswordResetToken,
+} from '../../services/passwordResetTokenService.js';
 import { resetPasswordSchema } from './schemas.js';
 
 export async function resetPassword(req: Request, res: Response): Promise<void> {
@@ -17,21 +18,16 @@ export async function resetPassword(req: Request, res: Response): Promise<void> 
   }
   const { newPassword, token } = validation.value;
 
-  const resetRecord = await findPasswordResetTokenByToken(token);
-  if (!resetRecord) {
-    res.status(400).json({ error: 'Token inválido o expirado' });
-    return;
-  }
-  if (new Date() > resetRecord.expiresAt) {
-    await deletePasswordResetToken(token);
-    res.status(400).json({ error: 'Token inválido o expirado' });
+  const tokenValidation = await validatePasswordResetToken(token);
+  if (!tokenValidation.valid) {
+    res.status(400).json({ error: passwordResetTokenErrorMessage(tokenValidation.reason) });
     return;
   }
 
   const hashedPassword = await createHash(newPassword);
-  await updateUserPassword(resetRecord.userId, hashedPassword);
+  await updateUserPassword(tokenValidation.userId, hashedPassword);
   await deletePasswordResetToken(token);
-  await revokeAllLinkedDevicesForUser(resetRecord.userId);
+  await revokeAllLinkedDevicesForUser(tokenValidation.userId);
 
   res.json({ message: 'Contraseña actualizada correctamente' });
 }

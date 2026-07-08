@@ -132,6 +132,35 @@ const migrations: MigrationFunction[] = [
     },
     version: 3,
   },
+  {
+    name: 'Add phoneVerified and unique phone index',
+    up: async (tx: TransactionClient) => {
+      const deduped = await tx.$executeRaw`
+        UPDATE "User" u
+        SET phone = NULL
+        WHERE u.phone IS NOT NULL
+          AND u.id NOT IN (
+            SELECT DISTINCT ON (phone) id
+            FROM "User"
+            WHERE phone IS NOT NULL
+            ORDER BY phone, "createdAt" ASC
+          )
+      `;
+      console.log(`Cleared duplicate phone values on ${deduped} user(s)`);
+
+      await tx.$executeRaw`
+        ALTER TABLE "User"
+        ADD COLUMN IF NOT EXISTS "phoneVerified" BOOLEAN NOT NULL DEFAULT false
+      `;
+
+      await tx.$executeRaw`
+        CREATE UNIQUE INDEX IF NOT EXISTS "User_phone_key" ON "User"("phone")
+      `;
+
+      console.log('phoneVerified column and unique phone index ensured');
+    },
+    version: 4,
+  },
 ];
 
 const runMigrations = async () => {

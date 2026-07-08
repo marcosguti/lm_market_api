@@ -1,10 +1,9 @@
 import type { Request, Response } from 'express';
 
-import { signAccessToken, signRefreshToken } from '../../libs/jwt.js';
-import { comparePassword, createHash } from '../../libs/passwordHashing.js';
-import { upsertLinkedDevice } from '../../queries/linkedDevice.js';
-import { createToken } from '../../queries/token.js';
+import { comparePassword } from '../../libs/passwordHashing.js';
 import { findUserByEmail } from '../../queries/user.js';
+import { getActiveCodeRemainingSeconds } from '../../services/emailVerification/index.js';
+import { issueAuthSession } from './issueAuthSession.js';
 import { loginSchema } from './schemas.js';
 
 export async function login(req: Request, res: Response): Promise<void> {
@@ -21,22 +20,17 @@ export async function login(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  const accessToken = signAccessToken({ userId: user.id });
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  await createToken({ expirationDate: expiresAt, userId: user.id });
+  if (!user.emailVerified) {
+    const codeExpiresInSeconds = await getActiveCodeRemainingSeconds(user.id, 'email_verification');
+    res.status(403).json({
+      code: 'EMAIL_NOT_VERIFIED',
+      codeExpiresInSeconds,
+      email: user.email,
+      error: 'Debes verificar tu correo antes de iniciar sesión',
+    });
+    return;
+  }
 
-  const refreshToken = signRefreshToken({ userId: user.id });
-  const refreshTokenHash = await createHash(refreshToken);
-  await upsertLinkedDevice({
-    deviceId,
-    refreshTokenHash,
-    userId: user.id,
-  });
-
-  const { password: _p, ...userWithoutPassword } = user;
-  res.json({
-    accessToken,
-    refreshToken,
-    user: userWithoutPassword,
-  });
+  const session = await issueAuthSession(user, deviceId);
+  res.json(session);
 }

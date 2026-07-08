@@ -53,13 +53,27 @@ If the installation was successful, the server will be up in the port 3000
 2. Copy the file `backup.dump` to folder `loadDB`
 3. Run
    `npm run loadDB`
-4. Run migrations
-   `npm run runMigrationDev`
+4. Run migrations (safe for existing data; does not reset the database)
+   `npm run runMigration`
 5. Update DB
    `npm run updateDB`
 
 ### Run migrations and update DB models
 
+**Existing database with data** (recommended — does not reset):
+
+1. Stop server
+2. Run
+   `npm run runMigration`
+3. Run
+   `npm run updateDB`
+
+**New schema migration in development** (only on empty/fresh DB):
+
 1. Stop server
 2. Run (replace MIGRATION_NAME with the migration name)
    `npm run runMigrationDev -- MIGRATION_NAME`
+3. Run
+   `npm run updateDB`
+
+> **Note:** `runMigrationDev` uses `prisma migrate dev` and may request a database reset if migration history has drifted (e.g. after `loadDB` or renamed migrations). Use `runMigration` + `updateDB` instead to preserve data.

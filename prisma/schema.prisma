@@ -40,25 +40,47 @@ enum PaymentMethod {
 }
 
 model User {
-  id           String       @id @default(uuid())
-  address      String?
-  createdAt    DateTime     @default(now())
-  email        String       @unique
-  firstName    String
-  lastName     String
-  numberId     String       @unique
-  numberIdType NumberIdType
-  password     String
-  phone        String?
-  type         UserType
-  updatedAt    DateTime     @updatedAt
+  id            String       @id @default(uuid())
+  address       String?
+  createdAt     DateTime     @default(now())
+  email         String       @unique
+  firstName     String
+  lastName      String
+  numberId      String       @unique
+  numberIdType  NumberIdType
+  password      String
+  phone         String?      @unique
+  phoneVerified Boolean      @default(false)
+  emailVerified Boolean      @default(false)
+  type          UserType
+  updatedAt     DateTime     @updatedAt
 
-  linkedDevices       LinkedDevice[]
-  notifications       Notification[]
-  orders              Order[]
-  deliveryAssignments Order[]              @relation("OrderDeliveryUser")
-  passwordResetTokens PasswordResetToken[]
-  tokens              Token[]
+  linkedDevices          LinkedDevice[]
+  notifications          Notification[]
+  orders                 Order[]
+  deliveryAssignments    Order[]                 @relation("OrderDeliveryUser")
+  passwordResetTokens    PasswordResetToken[]
+  emailVerificationCodes EmailVerificationCode[]
+  tokens                 Token[]
+}
+
+enum OtpCodePurpose {
+  email_verification
+  login
+}
+
+model EmailVerificationCode {
+  id             String         @id @default(uuid())
+  codeHash       String
+  expiresAt      DateTime
+  failedAttempts Int            @default(0)
+  purpose        OtpCodePurpose @default(email_verification)
+  createdAt      DateTime       @default(now())
+  userId         String
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, purpose])
 }
 
 model Brand {

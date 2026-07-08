@@ -6,6 +6,8 @@ const authMocks = vi.hoisted(() => ({
   verifyToken: vi.fn(),
 }));
 
+export { authMocks };
+
 vi.mock('../../../libs/jwt.js', () => ({
   verifyToken: authMocks.verifyToken,
 }));

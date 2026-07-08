@@ -1,5 +1,7 @@
 import Joi from 'joi';
 
+import { phoneSchema } from '../../utils/phone.js';
+
 export const DEFAULT_TEMP_PASSWORD = '#123456';
 
 export const listQuerySchema = Joi.object({
@@ -23,7 +25,7 @@ export const createSchema = Joi.object({
       'string.min': 'La contraseña debe tener al menos 8 caracteres',
       'string.pattern.base': 'La contraseña debe contener mayúsculas, minúsculas y números',
     }),
-  phone: Joi.string().allow('').optional(),
+  phone: phoneSchema.optional(),
   type: Joi.string().valid('admin', 'client', 'deliveryDriver').required(),
 });
 
@@ -34,6 +36,6 @@ export const patchSchema = Joi.object({
   lastName: Joi.string().optional(),
   numberId: Joi.string().optional(),
   numberIdType: Joi.string().valid('V', 'E', 'P', 'J').optional(),
-  phone: Joi.string().allow('').optional(),
+  phone: phoneSchema.optional(),
   type: Joi.string().valid('admin', 'client', 'deliveryDriver').optional(),
 }).min(1);

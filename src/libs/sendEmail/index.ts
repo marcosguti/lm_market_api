@@ -1,5 +1,8 @@
 import Mailjet from 'node-mailjet';
 
+import { getLogoInlineAttachment } from './logo.js';
+import { getEmailVerificationTemplate } from './templates/emailVerification.js';
+import { getLoginCodeTemplate } from './templates/loginCode.js';
 import { getPasswordResetTemplate } from './templates/passwordReset.js';
 
 type MailjetApi = {
@@ -70,6 +73,29 @@ const maskResetUrl = (resetUrl: string): string => {
   }
 };
 
+const buildMailjetMessage = ({
+  htmlPart,
+  subject,
+  toEmail,
+}: {
+  htmlPart: string;
+  subject: string;
+  toEmail: string;
+}) => {
+  const { fromEmail, fromName } = assertMailjetConfig();
+
+  return {
+    From: {
+      Email: fromEmail,
+      Name: fromName,
+    },
+    HTMLPart: htmlPart,
+    InlinedAttachments: [getLogoInlineAttachment()],
+    Subject: subject,
+    To: [{ Email: toEmail }],
+  };
+};
+
 const logMailjetSendFailure = (err: unknown): void => {
   if (err && typeof err === 'object') {
     const error = err as {
@@ -77,6 +103,7 @@ const logMailjetSendFailure = (err: unknown): void => {
       response?: { body?: unknown; status?: number };
       statusCode?: number;
     };
+
     console.error('[mailjet] send failed', {
       body: error.response?.body,
       message: error.message,
@@ -84,7 +111,114 @@ const logMailjetSendFailure = (err: unknown): void => {
     });
     return;
   }
+
   console.error('[mailjet] send failed', err);
+};
+
+export const sendEmailVerificationCode = async ({
+  code,
+  email,
+  firstName,
+  ttlMinutes,
+}: {
+  code: string;
+  email: string;
+  firstName: string;
+  ttlMinutes: number;
+}): Promise<void> => {
+  const { fromEmail } = assertMailjetConfig();
+  const mailjet = getMailjetClient();
+
+  const payload = {
+    Messages: [
+      buildMailjetMessage({
+        htmlPart: getEmailVerificationTemplate({ code, firstName, ttlMinutes }),
+        subject: 'Verifica tu email — LM Market',
+        toEmail: email,
+      }),
+    ],
+  };
+
+  // eslint-disable-next-line no-console
+  console.info('[mailjet] sending email verification', {
+    from: fromEmail,
+    to: email,
+  });
+
+  try {
+    const response = await mailjet.post('send', { version: 'v3.1' }).request(payload);
+    const message = response.body?.Messages?.[0];
+    const status = message?.Status;
+
+    // eslint-disable-next-line no-console
+    console.info('[mailjet] send response', {
+      errors: message?.Errors,
+      messageId: message?.MessageID,
+      status,
+    });
+
+    if (status !== 'success') {
+      throw new Error(
+        `Mailjet status: ${status ?? 'unknown'} - ${JSON.stringify(message?.Errors ?? response.body)}`,
+      );
+    }
+  } catch (err) {
+    logMailjetSendFailure(err);
+    throw err;
+  }
+};
+
+export const sendLoginCode = async ({
+  code,
+  email,
+  firstName,
+  ttlMinutes,
+}: {
+  code: string;
+  email: string;
+  firstName: string;
+  ttlMinutes: number;
+}): Promise<void> => {
+  const { fromEmail } = assertMailjetConfig();
+  const mailjet = getMailjetClient();
+
+  const payload = {
+    Messages: [
+      buildMailjetMessage({
+        htmlPart: getLoginCodeTemplate({ code, firstName, ttlMinutes }),
+        subject: 'Tu código de acceso — LM Market',
+        toEmail: email,
+      }),
+    ],
+  };
+
+  // eslint-disable-next-line no-console
+  console.info('[mailjet] sending login code', {
+    from: fromEmail,
+    to: email,
+  });
+
+  try {
+    const response = await mailjet.post('send', { version: 'v3.1' }).request(payload);
+    const message = response.body?.Messages?.[0];
+    const status = message?.Status;
+
+    // eslint-disable-next-line no-console
+    console.info('[mailjet] send response', {
+      errors: message?.Errors,
+      messageId: message?.MessageID,
+      status,
+    });
+
+    if (status !== 'success') {
+      throw new Error(
+        `Mailjet status: ${status ?? 'unknown'} - ${JSON.stringify(message?.Errors ?? response.body)}`,
+      );
+    }
+  } catch (err) {
+    logMailjetSendFailure(err);
+    throw err;
+  }
 };
 
 export const sendPasswordResetEmail = async ({
@@ -98,20 +232,16 @@ export const sendPasswordResetEmail = async ({
   resetUrl: string;
   ttlHours: number;
 }): Promise<void> => {
-  const { fromEmail, fromName } = assertMailjetConfig();
+  const { fromEmail } = assertMailjetConfig();
   const mailjet = getMailjetClient();
 
   const payload = {
     Messages: [
-      {
-        From: {
-          Email: fromEmail,
-          Name: fromName,
-        },
-        HTMLPart: getPasswordResetTemplate({ firstName, resetUrl, ttlHours }),
-        Subject: 'Restablece tu contraseña — LM Market',
-        To: [{ Email: email }],
-      },
+      buildMailjetMessage({
+        htmlPart: getPasswordResetTemplate({ firstName, resetUrl, ttlHours }),
+        subject: 'Restablece tu contraseña — LM Market',
+        toEmail: email,
+      }),
     ],
   };
 

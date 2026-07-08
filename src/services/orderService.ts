@@ -30,6 +30,7 @@ export interface InventoryChange {
 export interface OrderLine {
   code: string;
   description: null | string;
+  imageUrl?: null | string;
   lineTotal: number;
   name: string;
   quantity: number;
@@ -38,6 +39,7 @@ export interface OrderLine {
 
 export interface OrderWithLines extends Omit<Order, 'products' | 'totalAmount'> {
   products: OrderLine[];
+  storeName?: null | string;
   totalAmount: number;
 }
 
@@ -471,6 +473,7 @@ export async function getUserOrderHistory(
   };
   const [data, total] = await Promise.all([
     client.order.findMany({
+      include: { store: { select: { name: true } } },
       orderBy: { createdAt: 'desc' },
       skip,
       take: pageSize,
@@ -478,8 +481,12 @@ export async function getUserOrderHistory(
     }),
     client.order.count({ where }),
   ]);
+  const serialized = data.map((order) => ({
+    ...serializeOrder(order),
+    storeName: order.store?.name ?? null,
+  }));
   return {
-    data: data.map(serializeOrder),
+    data: await enrichOrdersWithProductImages(serialized),
     page,
     pageSize,
     total,
@@ -571,7 +578,11 @@ export async function listKitchenOrders(
   };
   const [data, total] = await Promise.all([
     client.order.findMany({
-      include: { payment: true, user: { select: { numberId: true } } },
+      include: {
+        payment: true,
+        store: { select: { name: true } },
+        user: { select: { numberId: true } },
+      },
       orderBy: { createdAt: 'desc' },
       skip,
       take: pageSize,
@@ -579,12 +590,14 @@ export async function listKitchenOrders(
     }),
     client.order.count({ where }),
   ]);
+  const serialized = data.map((order) => ({
+    ...serializeOrder(order),
+    payment: order.payment ? serializePayment(order.payment) : null,
+    storeName: order.store?.name ?? null,
+    userNumberId: order.user.numberId,
+  }));
   return {
-    data: data.map((order) => ({
-      ...serializeOrder(order),
-      payment: order.payment ? serializePayment(order.payment) : null,
-      userNumberId: order.user.numberId,
-    })),
+    data: await enrichOrdersWithProductImages(serialized),
     page,
     pageSize,
     total,
@@ -1018,6 +1031,18 @@ async function applyStoreIdToPendingOrder(
 
 const CANCELLABLE_STATUSES: OrderStatus[] = ['pending', 'paymentConfirmed', 'preparing'];
 
+export function applyImageUrlsToOrderLines(
+  lines: OrderLine[],
+  imagesByCode: Map<string, null | string>,
+): OrderLine[] {
+  return lines.map((line) => {
+    if (line.imageUrl) return line;
+    const imageUrl = imagesByCode.get(line.code);
+    if (!imageUrl) return line;
+    return { ...line, imageUrl };
+  });
+}
+
 function canTransitionByAdmin(from: OrderStatus, to: OrderStatus): boolean {
   if (to === 'cancelled') return CANCELLABLE_STATUSES.includes(from);
   if (from === 'pending' && to === 'paymentConfirmed') return true;
@@ -1029,6 +1054,27 @@ function canTransitionByAdmin(from: OrderStatus, to: OrderStatus): boolean {
 
 function computeTotal(lines: OrderLine[]): number {
   return Number(lines.reduce((sum, line) => sum + line.lineTotal, 0).toFixed(2));
+}
+
+async function enrichOrdersWithProductImages<T extends OrderWithLines>(orders: T[]): Promise<T[]> {
+  const codes = new Set<string>();
+  for (const order of orders) {
+    for (const line of order.products) {
+      if (!line.imageUrl) codes.add(line.code);
+    }
+  }
+  if (codes.size === 0) return orders;
+
+  const products = await client.product.findMany({
+    select: { code: true, imageUrl: true },
+    where: { code: { in: Array.from(codes) } },
+  });
+  const imagesByCode = new Map(products.map((p) => [p.code, p.imageUrl ?? null]));
+
+  return orders.map((order) => ({
+    ...order,
+    products: applyImageUrlsToOrderLines(order.products, imagesByCode),
+  }));
 }
 
 async function getPendingOrderForUserInTx(
@@ -1125,6 +1171,7 @@ async function reconcileLines(
     resultLines.push({
       code: line.code,
       description: product.description,
+      imageUrl: product.imageUrl ?? null,
       lineTotal: Number((quantity * unitPrice).toFixed(2)),
       name: product.name,
       quantity,
@@ -1183,6 +1230,7 @@ function toOrderLines(value: Prisma.JsonValue): OrderLine[] {
     parsed.push({
       code: maybe.code,
       description: typeof maybe.description === 'string' ? maybe.description : null,
+      imageUrl: typeof maybe.imageUrl === 'string' ? maybe.imageUrl : null,
       lineTotal:
         typeof maybe.lineTotal === 'number'
           ? maybe.lineTotal

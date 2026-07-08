@@ -8,6 +8,7 @@ import {
   updateLinkedDeviceRefreshTokenHash,
   upsertLinkedDevice,
 } from '../../queries/linkedDevice.js';
+import { findUserById } from '../../queries/user.js';
 import { refreshSchema } from './schemas.js';
 
 const REVOKED_PREFIX = 'revoked:';
@@ -48,6 +49,16 @@ export async function refresh(req: Request, res: Response): Promise<void> {
     // Revoke the whole device to invalidate any other outstanding tokens.
     await revokeLinkedDevice(payload.userId, deviceId);
     res.status(401).json({ error: 'Token de refresco inválido' });
+    return;
+  }
+
+  const user = await findUserById(payload.userId);
+  if (!user || !user.emailVerified) {
+    await revokeLinkedDevice(payload.userId, deviceId);
+    res.status(403).json({
+      code: 'EMAIL_NOT_VERIFIED',
+      error: 'Debes verificar tu correo antes de continuar',
+    });
     return;
   }
 

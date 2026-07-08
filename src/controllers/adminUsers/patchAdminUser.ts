@@ -6,6 +6,7 @@ import {
   findUserByEmail,
   findUserById,
   findUserByNumberId,
+  findUserByPhone,
   updateUserByAdmin,
 } from '../../queries/user.js';
 import { patchSchema } from './schemas.js';
@@ -43,6 +44,15 @@ export async function patchAdminUser(req: AuthRequest, res: Response): Promise<v
       return;
     }
   }
+  if (body.phone !== undefined && body.phone !== existing.phone) {
+    if (body.phone) {
+      const clash = await findUserByPhone(body.phone);
+      if (clash && clash.id !== id) {
+        res.status(409).json({ error: 'Teléfono ya registrado' });
+        return;
+      }
+    }
+  }
 
   try {
     const user = await updateUserByAdmin(id, {
@@ -58,7 +68,7 @@ export async function patchAdminUser(req: AuthRequest, res: Response): Promise<v
     res.json({ user: serializeUser(user) });
   } catch (err) {
     if (isPrismaUniqueError(err)) {
-      res.status(409).json({ error: 'El email o la cédula ya existe' });
+      res.status(409).json({ error: 'El email, la cédula o el teléfono ya existe' });
       return;
     }
     throw err;
