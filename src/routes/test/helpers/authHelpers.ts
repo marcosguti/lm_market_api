@@ -12,10 +12,6 @@ vi.mock('../../../libs/jwt.js', () => ({
   verifyToken: authMocks.verifyToken,
 }));
 
-vi.mock('../../../queries/user.js', () => ({
-  findUserById: authMocks.findUserById,
-}));
-
 export function mockAuthenticatedUser(userId: string, userType: UserType): void {
   authMocks.verifyToken.mockReturnValue({ userId });
   authMocks.findUserById.mockResolvedValue({

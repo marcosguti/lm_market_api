@@ -80,6 +80,14 @@ export interface ConfirmPaymentDetails {
   screenshotUrl?: null | string;
 }
 
+export interface KitchenOrdersFilters {
+  createdFrom?: Date;
+  createdTo?: Date;
+  id?: string;
+  status?: 'all' | OrderStatus;
+  storeId?: string;
+}
+
 export interface MobilePaymentP2cDetails {
   amount: number;
   clientBankCode: string;
@@ -128,6 +136,25 @@ export async function adminSetOrderStatus(
     if (!updated) throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
     return serializeOrder(updated);
   });
+}
+
+export function buildKitchenOrdersWhere(
+  filters: KitchenOrdersFilters = {},
+): PrismaType.OrderWhereInput {
+  const { createdFrom, createdTo, id, status = 'all', storeId } = filters;
+  return {
+    ...(id ? { id: { contains: id } } : {}),
+    ...(storeId ? { storeId } : {}),
+    ...(status !== 'all' ? { status } : { status: { notIn: ['pending', 'cancelled'] } }),
+    ...(createdFrom || createdTo
+      ? {
+          createdAt: {
+            ...(createdFrom ? { gte: startOfDayDate(createdFrom) } : {}),
+            ...(createdTo ? { lte: endOfDayDate(createdTo) } : {}),
+          },
+        }
+      : {}),
+  };
 }
 
 export async function claimDeliveryOrder(
@@ -565,6 +592,7 @@ export async function listKitchenOrders(
   page: number,
   pageSize: number,
   _userType: UserType,
+  filters: KitchenOrdersFilters = {},
 ): Promise<{
   data: OrderWithUser[];
   page: number;
@@ -573,9 +601,7 @@ export async function listKitchenOrders(
   totalPages: number;
 }> {
   const skip = (page - 1) * pageSize;
-  const where: PrismaType.OrderWhereInput = {
-    status: { notIn: ['pending', 'cancelled'] },
-  };
+  const where = buildKitchenOrdersWhere(filters);
   const [data, total] = await Promise.all([
     client.order.findMany({
       include: {
@@ -603,6 +629,37 @@ export async function listKitchenOrders(
     total,
     totalPages: Math.ceil(total / pageSize) || 1,
   };
+}
+
+export async function listNotificationsForInbox(
+  userId: string,
+  recentRead: number,
+): Promise<{
+  data: Notification[];
+  total: number;
+  unreadCount: number;
+}> {
+  const [unread, read, unreadCount, total] = await Promise.all([
+    client.notification.findMany({
+      orderBy: { createdAt: 'desc' },
+      where: { readAt: null, userId },
+    }),
+    recentRead > 0
+      ? client.notification.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: recentRead,
+          where: { readAt: { not: null }, userId },
+        })
+      : Promise.resolve([]),
+    client.notification.count({ where: { readAt: null, userId } }),
+    client.notification.count({ where: { userId } }),
+  ]);
+
+  const data = [...unread, ...read].sort(
+    (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+  );
+
+  return { data, total, unreadCount };
 }
 
 export async function listNotificationsForUser(
@@ -1029,6 +1086,18 @@ async function applyStoreIdToPendingOrder(
   });
 }
 
+function endOfDayDate(date: Date): Date {
+  const value = new Date(date);
+  value.setHours(23, 59, 59, 999);
+  return value;
+}
+
+function startOfDayDate(date: Date): Date {
+  const value = new Date(date);
+  value.setHours(0, 0, 0, 0);
+  return value;
+}
+
 const CANCELLABLE_STATUSES: OrderStatus[] = ['pending', 'paymentConfirmed', 'preparing'];
 
 export function applyImageUrlsToOrderLines(
@@ -1043,7 +1112,7 @@ export function applyImageUrlsToOrderLines(
   });
 }
 
-function canTransitionByAdmin(from: OrderStatus, to: OrderStatus): boolean {
+export function canTransitionByAdmin(from: OrderStatus, to: OrderStatus): boolean {
   if (to === 'cancelled') return CANCELLABLE_STATUSES.includes(from);
   if (from === 'pending' && to === 'paymentConfirmed') return true;
   if (from === 'paymentConfirmed' && to === 'preparing') return true;
@@ -1052,8 +1121,20 @@ function canTransitionByAdmin(from: OrderStatus, to: OrderStatus): boolean {
   return false;
 }
 
-function computeTotal(lines: OrderLine[]): number {
+export function computeTotal(lines: OrderLine[]): number {
   return Number(lines.reduce((sum, line) => sum + line.lineTotal, 0).toFixed(2));
+}
+
+export function mergeInputsByCode(inputs: CartLineInput[]): CartLineInput[] {
+  const map = new Map<string, number>();
+  for (const input of inputs) {
+    const code = input.code.trim();
+    if (!code) continue;
+    const qty = Math.max(0, Math.trunc(input.quantity));
+    if (qty <= 0) continue;
+    map.set(code, (map.get(code) ?? 0) + qty);
+  }
+  return Array.from(map.entries()).map(([code, quantity]) => ({ code, quantity }));
 }
 
 async function enrichOrdersWithProductImages<T extends OrderWithLines>(orders: T[]): Promise<T[]> {
@@ -1088,18 +1169,6 @@ async function getPendingOrderForUserInTx(
       userId,
     },
   });
-}
-
-function mergeInputsByCode(inputs: CartLineInput[]): CartLineInput[] {
-  const map = new Map<string, number>();
-  for (const input of inputs) {
-    const code = input.code.trim();
-    if (!code) continue;
-    const qty = Math.max(0, Math.trunc(input.quantity));
-    if (qty <= 0) continue;
-    map.set(code, (map.get(code) ?? 0) + qty);
-  }
-  return Array.from(map.entries()).map(([code, quantity]) => ({ code, quantity }));
 }
 
 async function reconcileLines(

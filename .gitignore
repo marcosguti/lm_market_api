@@ -6,5 +6,6 @@ saveDB/*
 logs/*
 db_data/*
 dist/*
+coverage/*
 product_images/*
 !product_images/.gitkeep

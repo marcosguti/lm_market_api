@@ -16,6 +16,7 @@ import {
   authMocks,
   mockAuthenticatedUser,
 } from '../../../routes/test/helpers/authHelpers.js';
+import '../../../routes/test/helpers/queryMocks.js';
 import { createTestApp } from '../../../routes/test/helpers/createTestApp.js';
 
 const app = createTestApp();
