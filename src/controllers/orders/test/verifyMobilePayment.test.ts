@@ -14,7 +14,7 @@ vi.mock('../../../config/megasoft.js', () => ({
     amountOverride: null,
   },
   megasoftCertP2cPayload: {},
-  resolveMegasoftAmount: (amount: number) => amount,
+  resolveMegasoftAmount: async (amount: number) => amount,
 }));
 
 vi.mock('../../../prisma.js', () => ({
@@ -71,6 +71,7 @@ describe('verifyMobilePayment controller extended', () => {
       .send({
         amount: 100,
         bankCode: '0105',
+        deliveryAddress: 'Calle 123',
         phone: '04141234567',
         nationalId: 'V12345678',
         reference: 'REF123',

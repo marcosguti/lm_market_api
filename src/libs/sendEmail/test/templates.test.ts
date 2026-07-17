@@ -4,6 +4,7 @@ import { LOGO_CONTENT_ID } from '../logo.js';
 import { BRAND } from '../templates/common.js';
 import { getEmailVerificationTemplate } from '../templates/emailVerification.js';
 import { getLoginCodeTemplate } from '../templates/loginCode.js';
+import { getOrderCancelledTemplate } from '../templates/orderCancelled.js';
 import { getPasswordResetTemplate } from '../templates/passwordReset.js';
 
 describe('email templates', () => {
@@ -56,5 +57,20 @@ describe('email templates', () => {
 
     expect(html).not.toContain('<script>');
     expect(html).toContain('&lt;script&gt;');
+  });
+
+  it('order cancelled template includes reason and short order id', () => {
+    const html = getOrderCancelledTemplate({
+      firstName: 'Marco',
+      reason: 'Producto agotado <script>',
+      shortOrderId: '#a5350180',
+    });
+
+    expect(html).toContain('Hola Marco');
+    expect(html).toContain('#a5350180');
+    expect(html).toContain('Motivo de cancelación');
+    expect(html).toContain('Producto agotado &lt;script&gt;');
+    expect(html).not.toContain('<script>');
+    expect(html).toContain(`src="cid:${LOGO_CONTENT_ID}"`);
   });
 });

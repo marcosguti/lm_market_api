@@ -24,7 +24,7 @@ export async function getProducts(req: Request, res: Response): Promise<void> {
     pageSize,
     search: search || undefined,
     sort,
-    storeId: storeId || undefined,
+    storeId,
   });
 
   res.json({

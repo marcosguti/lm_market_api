@@ -2,21 +2,23 @@ import { vi } from 'vitest';
 
 const orderMocks = vi.hoisted(() => ({
   adminSetOrderStatus: vi.fn(),
-  claimDeliveryOrder: vi.fn(),
+  assignOrderToDelivery: vi.fn(),
   confirmPendingOrderPaymentWithDetails: vi.fn(),
   createOrderStatusNotification: vi.fn(),
   ensurePendingCart: vi.fn(),
   getAnyOrderById: vi.fn(),
   getOrderByIdForUser: vi.fn(),
   getUserOrderHistory: vi.fn(),
-  listDeliveryAvailable: vi.fn(),
   listDeliveryMine: vi.fn(),
   listKitchenOrders: vi.fn(),
   listNotificationsForUser: vi.fn(),
+  listOrderStatusHistory: vi.fn(),
   markAllNotificationsAsRead: vi.fn(),
   markNotificationAsRead: vi.fn(),
   markOrderDelivered: vi.fn(),
   notifyOrderPaid: vi.fn(),
+  startOrderDelivering: vi.fn(),
+  unassignOrderFromDelivery: vi.fn(),
   updatePendingOrderLines: vi.fn(),
   verifyMobilePaymentP2c: vi.fn(),
   verifyPaymentByAdmin: vi.fn(),
@@ -27,26 +29,36 @@ vi.mock('../../../services/orderService.js', async (importOriginal) => {
   return {
     ...actual,
     adminSetOrderStatus: orderMocks.adminSetOrderStatus,
-    claimDeliveryOrder: orderMocks.claimDeliveryOrder,
+    assignOrderToDelivery: orderMocks.assignOrderToDelivery,
     confirmPendingOrderPaymentWithDetails: orderMocks.confirmPendingOrderPaymentWithDetails,
     createOrderStatusNotification: orderMocks.createOrderStatusNotification,
     ensurePendingCart: orderMocks.ensurePendingCart,
     getAnyOrderById: orderMocks.getAnyOrderById,
     getOrderByIdForUser: orderMocks.getOrderByIdForUser,
     getUserOrderHistory: orderMocks.getUserOrderHistory,
-    listDeliveryAvailable: orderMocks.listDeliveryAvailable,
     listDeliveryMine: orderMocks.listDeliveryMine,
     listKitchenOrders: orderMocks.listKitchenOrders,
     listNotificationsForUser: orderMocks.listNotificationsForUser,
+    listOrderStatusHistory: orderMocks.listOrderStatusHistory,
     markAllNotificationsAsRead: orderMocks.markAllNotificationsAsRead,
     markNotificationAsRead: orderMocks.markNotificationAsRead,
     markOrderDelivered: orderMocks.markOrderDelivered,
     notifyOrderPaid: orderMocks.notifyOrderPaid,
+    startOrderDelivering: orderMocks.startOrderDelivering,
+    unassignOrderFromDelivery: orderMocks.unassignOrderFromDelivery,
     updatePendingOrderLines: orderMocks.updatePendingOrderLines,
     verifyMobilePaymentP2c: orderMocks.verifyMobilePaymentP2c,
     verifyPaymentByAdmin: orderMocks.verifyPaymentByAdmin,
   };
 });
+
+vi.mock('../../../libs/filesInDigitalOcean/index.js', () => ({
+  uploadBannerImage: vi.fn().mockResolvedValue('https://cdn/banner.jpg'),
+  uploadDealImage: vi.fn().mockResolvedValue('https://cdn/deal.jpg'),
+  uploadDeliveryProof: vi.fn().mockResolvedValue('https://cdn/delivery/proof.jpg'),
+  uploadFile: vi.fn().mockResolvedValue('https://cdn/file.jpg'),
+  uploadPaymentScreenshot: vi.fn().mockResolvedValue('https://cdn/payment.jpg'),
+}));
 
 const sampleOrder = {
   id: 'o1',
@@ -67,13 +79,21 @@ export function resetOrderServiceMocks(): void {
   });
   orderMocks.verifyMobilePaymentP2c.mockResolvedValue({ order: { id: 'o1', status: 'paid' } });
   orderMocks.listKitchenOrders.mockResolvedValue({ data: [], page: 1, pageSize: 20, total: 0 });
-  orderMocks.listDeliveryAvailable.mockResolvedValue({ data: [], page: 1, pageSize: 20, total: 0 });
   orderMocks.listDeliveryMine.mockResolvedValue({ data: [], page: 1, pageSize: 20, total: 0 });
-  orderMocks.claimDeliveryOrder.mockResolvedValue({ ...sampleOrder, status: 'outForDelivery' });
+  orderMocks.assignOrderToDelivery.mockResolvedValue({
+    ...sampleOrder,
+    status: 'assignedToDeliveryDriver',
+  });
+  orderMocks.unassignOrderFromDelivery.mockResolvedValue({
+    ...sampleOrder,
+    status: 'readyForDelivery',
+  });
+  orderMocks.startOrderDelivering.mockResolvedValue({ ...sampleOrder, status: 'delivering' });
   orderMocks.markOrderDelivered.mockResolvedValue({ ...sampleOrder, status: 'delivered' });
-  orderMocks.getAnyOrderById.mockResolvedValue({ ...sampleOrder, status: 'outForDelivery' });
+  orderMocks.getAnyOrderById.mockResolvedValue({ ...sampleOrder, status: 'delivering' });
   orderMocks.adminSetOrderStatus.mockResolvedValue({ ...sampleOrder, status: 'preparing' });
   orderMocks.verifyPaymentByAdmin.mockResolvedValue({ ...sampleOrder, status: 'paid' });
+  orderMocks.listOrderStatusHistory.mockResolvedValue([]);
   orderMocks.createOrderStatusNotification.mockResolvedValue(undefined);
   orderMocks.notifyOrderPaid.mockResolvedValue(undefined);
   orderMocks.listNotificationsForUser.mockResolvedValue({

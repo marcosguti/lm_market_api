@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { kitchenListQuerySchema } from '../schemas.js';
+import { kitchenListQuerySchema, patchStatusSchema } from '../schemas.js';
 
 describe('kitchenListQuerySchema', () => {
   it('defaults status to all and pagination values', () => {
@@ -16,10 +16,12 @@ describe('kitchenListQuerySchema', () => {
   it('accepts all order status values', () => {
     const statuses = [
       'pending',
+      'paymentPendingConfirmation',
       'paymentConfirmed',
       'preparing',
       'readyForDelivery',
-      'outForDelivery',
+      'assignedToDeliveryDriver',
+      'delivering',
       'delivered',
       'cancelled',
     ] as const;
@@ -39,5 +41,36 @@ describe('kitchenListQuerySchema', () => {
       { convert: true },
     );
     expect(error).toBeDefined();
+  });
+});
+
+describe('patchStatusSchema', () => {
+  it('requires cancellationReason when status is cancelled', () => {
+    const missing = patchStatusSchema.validate({ status: 'cancelled' });
+    expect(missing.error).toBeDefined();
+
+    const short = patchStatusSchema.validate({
+      cancellationReason: 'no',
+      status: 'cancelled',
+    });
+    expect(short.error).toBeDefined();
+
+    const ok = patchStatusSchema.validate({
+      cancellationReason: '  Sin stock suficiente  ',
+      status: 'cancelled',
+    });
+    expect(ok.error).toBeUndefined();
+    expect(ok.value.cancellationReason).toBe('Sin stock suficiente');
+  });
+
+  it('forbids cancellationReason for non-cancel statuses', () => {
+    const { error } = patchStatusSchema.validate({
+      cancellationReason: 'no aplica',
+      status: 'preparing',
+    });
+    expect(error).toBeDefined();
+
+    const ok = patchStatusSchema.validate({ status: 'preparing' });
+    expect(ok.error).toBeUndefined();
   });
 });

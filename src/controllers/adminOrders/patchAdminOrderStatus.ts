@@ -3,6 +3,8 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { sendOrderCancelledEmail } from '../../libs/sendEmail/index.js';
+import { findUserById } from '../../queries/user.js';
 import {
   emitDeliveryOrderCancelled,
   emitOrderCancelled,
@@ -37,8 +39,18 @@ export async function patchAdminOrderStatus(req: AuthRequest, res: Response): Pr
       return;
     }
 
+    if (!req.userId) {
+      res.status(401).json({ error: 'No autenticado' });
+      return;
+    }
+
     const nextStatus = validation.value.status as OrderStatus;
-    const updated = await adminSetOrderStatus(orderId, nextStatus);
+    const cancellationReason =
+      nextStatus === 'cancelled'
+        ? (validation.value.cancellationReason as string).trim()
+        : undefined;
+
+    const updated = await adminSetOrderStatus(orderId, nextStatus, req.userId, cancellationReason);
     await createOrderStatusNotification(updated, before.status as OrderStatus);
     emitUserNotification(updated.userId, {
       body: formatOrderStatusChangeBody(before.status, updated.status),
@@ -59,10 +71,32 @@ export async function patchAdminOrderStatus(req: AuthRequest, res: Response): Pr
     if (updated.status === 'cancelled') {
       emitOrderCancelled({ orderId: updated.id });
       emitDeliveryOrderCancelled(updated.deliveryUserId, { orderId: updated.id });
+
+      try {
+        const customer = await findUserById(updated.userId);
+        if (customer?.email && cancellationReason) {
+          await sendOrderCancelledEmail({
+            email: customer.email,
+            firstName: customer.firstName,
+            reason: cancellationReason,
+            shortOrderId: formatShortOrderId(updated.id),
+          });
+        }
+      } catch (emailErr) {
+        console.error('[orders] failed to send cancellation email', {
+          error: emailErr,
+          orderId: updated.id,
+        });
+      }
     }
 
     res.json({ order: updated });
   } catch (err) {
     handleOrderError(err, res);
   }
+}
+
+function formatShortOrderId(orderId: string): string {
+  const segment = orderId.split('-')[0]?.trim() || orderId.trim();
+  return `#${segment}`;
 }

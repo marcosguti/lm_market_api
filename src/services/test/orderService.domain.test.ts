@@ -57,11 +57,10 @@ describe('computeTotal', () => {
 
 describe('canTransitionByAdmin', () => {
   const allowed: Array<[OrderStatus, OrderStatus]> = [
-    ['pending', 'paymentConfirmed'],
     ['paymentConfirmed', 'preparing'],
     ['preparing', 'readyForDelivery'],
-    ['outForDelivery', 'delivered'],
     ['pending', 'cancelled'],
+    ['paymentPendingConfirmation', 'cancelled'],
     ['paymentConfirmed', 'cancelled'],
     ['preparing', 'cancelled'],
   ];
@@ -71,8 +70,12 @@ describe('canTransitionByAdmin', () => {
   });
 
   it('rejects invalid transitions', () => {
+    expect(canTransitionByAdmin('pending', 'paymentConfirmed')).toBe(false);
+    expect(canTransitionByAdmin('paymentPendingConfirmation', 'paymentConfirmed')).toBe(false);
     expect(canTransitionByAdmin('pending', 'delivered')).toBe(false);
     expect(canTransitionByAdmin('delivered', 'cancelled')).toBe(false);
     expect(canTransitionByAdmin('readyForDelivery', 'delivered')).toBe(false);
+    expect(canTransitionByAdmin('delivering', 'delivered')).toBe(false);
+    expect(canTransitionByAdmin('assignedToDeliveryDriver', 'delivering')).toBe(false);
   });
 });

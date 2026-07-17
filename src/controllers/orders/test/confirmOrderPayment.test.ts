@@ -5,8 +5,11 @@ import type { AuthRequest } from '../../../middlewares/auth.js';
 import { confirmOrderPayment } from '../confirmOrderPayment.js';
 
 const confirmPendingOrderPaymentWithDetails = vi.fn();
-const notifyOrderPaid = vi.fn();
+const createOrderStatusNotification = vi.fn();
 const uploadPaymentScreenshot = vi.fn();
+const emitKitchenOrderUpdated = vi.fn();
+const emitOrderUpdated = vi.fn();
+const emitUserNotification = vi.fn();
 
 vi.mock('../../../config/megasoft.js', () => ({
   megasoftConfig: { enabled: false },
@@ -15,11 +18,17 @@ vi.mock('../../../config/megasoft.js', () => ({
 vi.mock('../../../services/orderService.js', () => ({
   confirmPendingOrderPaymentWithDetails: (...args: unknown[]) =>
     confirmPendingOrderPaymentWithDetails(...args),
-  notifyOrderPaid: (...args: unknown[]) => notifyOrderPaid(...args),
+  createOrderStatusNotification: (...args: unknown[]) => createOrderStatusNotification(...args),
 }));
 
 vi.mock('../../../libs/filesInDigitalOcean/index.js', () => ({
   uploadPaymentScreenshot: (...args: unknown[]) => uploadPaymentScreenshot(...args),
+}));
+
+vi.mock('../../../realtime/socket.js', () => ({
+  emitKitchenOrderUpdated: (...args: unknown[]) => emitKitchenOrderUpdated(...args),
+  emitOrderUpdated: (...args: unknown[]) => emitOrderUpdated(...args),
+  emitUserNotification: (...args: unknown[]) => emitUserNotification(...args),
 }));
 
 function mockRes(): Response & { statusCode: number; body?: unknown } {
@@ -43,9 +52,15 @@ describe('confirmOrderPayment controller', () => {
     vi.clearAllMocks();
     confirmPendingOrderPaymentWithDetails.mockResolvedValue({
       changes: [],
-      order: { id: 'o1', status: 'paymentConfirmed' },
+      order: {
+        id: 'o1',
+        status: 'paymentPendingConfirmation',
+        totalAmount: 10,
+        userId: 'client-1',
+      },
     });
-    notifyOrderPaid.mockResolvedValue(undefined);
+    createOrderStatusNotification.mockResolvedValue(undefined);
+    uploadPaymentScreenshot.mockResolvedValue('https://cdn.example/proof.jpg');
   });
 
   it('returns 403 for non-client users', async () => {
@@ -72,9 +87,14 @@ describe('confirmOrderPayment controller', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('returns 400 when non-cash payment lacks screenshot', async () => {
+  it('returns 400 when payment lacks screenshot', async () => {
     const req = {
-      body: { method: 'zelle', paidAt: new Date().toISOString(), reference: 'REF1' },
+      body: {
+        deliveryAddress: 'Calle 123',
+        method: 'zelle',
+        paidAt: new Date().toISOString(),
+        reference: 'REF1',
+      },
       params: { id: 'o1' },
       userId: 'client-1',
       userType: 'client',
@@ -85,7 +105,21 @@ describe('confirmOrderPayment controller', () => {
     expect(res.body).toEqual({ error: 'El comprobante de pago es requerido' });
   });
 
-  it('confirms cash payment without screenshot', async () => {
+  it('returns 400 when cash payment lacks screenshot', async () => {
+    const req = {
+      body: { deliveryAddress: 'Calle 123', method: 'cash' },
+      params: { id: 'o1' },
+      userId: 'client-1',
+      userType: 'client',
+    } as AuthRequest;
+    const res = mockRes();
+    await confirmOrderPayment(req, res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toEqual({ error: 'El comprobante de pago es requerido' });
+    expect(confirmPendingOrderPaymentWithDetails).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when deliveryAddress is missing', async () => {
     const req = {
       body: { method: 'cash' },
       params: { id: 'o1' },
@@ -94,13 +128,34 @@ describe('confirmOrderPayment controller', () => {
     } as AuthRequest;
     const res = mockRes();
     await confirmOrderPayment(req, res);
+    expect(res.statusCode).toBe(400);
+    expect(confirmPendingOrderPaymentWithDetails).not.toHaveBeenCalled();
+  });
+
+  it('confirms cash payment with screenshot to paymentPendingConfirmation', async () => {
+    const req = {
+      body: { deliveryAddress: 'Calle 123', method: 'cash' },
+      file: {
+        buffer: Buffer.from('img'),
+        mimetype: 'image/jpeg',
+      },
+      params: { id: 'o1' },
+      userId: 'client-1',
+      userType: 'client',
+    } as AuthRequest;
+    const res = mockRes();
+    await confirmOrderPayment(req, res);
     expect(res.statusCode).toBe(200);
+    expect(uploadPaymentScreenshot).toHaveBeenCalled();
     expect(confirmPendingOrderPaymentWithDetails).toHaveBeenCalledWith('client-1', 'o1', {
+      deliveryAddress: 'Calle 123',
       method: 'cash',
       paidAt: null,
       reference: null,
-      screenshotUrl: null,
+      screenshotUrl: 'https://cdn.example/proof.jpg',
     });
-    expect(notifyOrderPaid).toHaveBeenCalled();
+    expect(createOrderStatusNotification).toHaveBeenCalled();
+    expect(emitUserNotification).toHaveBeenCalled();
+    expect(emitKitchenOrderUpdated).toHaveBeenCalled();
   });
 });

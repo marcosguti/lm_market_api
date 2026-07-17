@@ -21,8 +21,10 @@ import {
   deleteFile,
   listImageObjectKeys,
   uploadBannerImage,
+  uploadBlogArticleContentImage,
   uploadBuffer,
   uploadDealImage,
+  uploadDeliveryProof,
   uploadFile,
   uploadPaymentScreenshot,
 } from '../index.js';
@@ -89,6 +91,13 @@ describe('filesInDigitalOcean', () => {
     });
   });
 
+  describe('uploadDeliveryProof', () => {
+    it('uploads to delivery prefix', async () => {
+      const url = await uploadDeliveryProof(Buffer.from('img'), 'image/jpeg', 'jpg', 'proof1');
+      expect(url).toBe('https://cdn.test.com/delivery/proof1.jpg');
+    });
+  });
+
   describe('uploadDealImage', () => {
     it('uploads to deals prefix', async () => {
       const url = await uploadDealImage(Buffer.from('img'), 'image/jpeg', 'jpg', 'deal1');
@@ -100,6 +109,18 @@ describe('filesInDigitalOcean', () => {
     it('uploads to banner prefix', async () => {
       const url = await uploadBannerImage(Buffer.from('img'), 'image/jpeg', 'jpg', 'banner1');
       expect(url).toBe('https://cdn.test.com/banner/banner1.jpg');
+    });
+  });
+
+  describe('uploadBlogArticleContentImage', () => {
+    it('uploads to blogs prefix', async () => {
+      const url = await uploadBlogArticleContentImage(
+        Buffer.from('img'),
+        'image/jpeg',
+        'jpg',
+        'blog1',
+      );
+      expect(url).toBe('https://cdn.test.com/blog-articles/blog1.jpg');
     });
   });
 

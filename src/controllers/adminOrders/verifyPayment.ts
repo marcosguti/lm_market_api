@@ -2,6 +2,7 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { notifyOrderPaid } from '../../services/orderService.js';
 import { getParam } from '../shared/orderHttp.js';
 
 export async function verifyPayment(req: AuthRequest, res: Response): Promise<void> {
@@ -25,6 +26,9 @@ export async function verifyPayment(req: AuthRequest, res: Response): Promise<vo
   try {
     const { verifyPaymentByAdmin } = await import('../../services/orderService.js');
     const order = await verifyPaymentByAdmin(orderId, req.userId, verify);
+    if (verify) {
+      await notifyOrderPaid(order, 'paymentPendingConfirmation');
+    }
     res.json({ order });
   } catch (err) {
     const { handleOrderError } = await import('../shared/orderHttp.js');

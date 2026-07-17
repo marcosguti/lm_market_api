@@ -9,6 +9,9 @@ const txMocks = vi.hoisted(() => ({
     update: vi.fn(),
     updateMany: vi.fn(),
   },
+  orderStatusHistory: {
+    create: vi.fn(),
+  },
   payment: {
     update: vi.fn(),
     upsert: vi.fn(),
@@ -23,6 +26,9 @@ const txMocks = vi.hoisted(() => ({
   },
   store: {
     findMany: vi.fn(),
+    findUnique: vi.fn(),
+  },
+  user: {
     findUnique: vi.fn(),
   },
 }));
@@ -41,7 +47,11 @@ vi.mock('../../config/megasoft.js', () => ({
     certHardcoded: false,
     enabled: true,
   },
-  resolveMegasoftAmount: (amount: number) => amount,
+  resolveMegasoftAmount: async (amount: number) => amount,
+}));
+
+vi.mock('../bcvExchangeRate.js', () => ({
+  getUsdVesRate: vi.fn().mockResolvedValue(600),
 }));
 
 vi.mock('../megasoft/index.js', () => ({
@@ -53,6 +63,9 @@ vi.mock('../megasoft/index.js', () => ({
 vi.mock('../../prisma.js', () => ({
   default: {
     $transaction: vi.fn(async (cb: (tx: typeof txMocks) => unknown) => cb(txMocks)),
+    exchangeRate: {
+      findUnique: vi.fn().mockResolvedValue(null),
+    },
     notification: {
       count: vi.fn(),
       create: vi.fn().mockResolvedValue({}),
@@ -64,20 +77,23 @@ vi.mock('../../prisma.js', () => ({
       findMany: vi.fn(),
       findUnique: vi.fn(),
     },
+    orderStatusHistory: {
+      findMany: vi.fn(),
+    },
     product: { findMany: vi.fn() },
   },
 }));
 
 import {
   adminSetOrderStatus,
-  claimDeliveryOrder,
+  assignOrderToDelivery,
   confirmPendingOrderPayment,
   confirmPendingOrderPaymentWithDetails,
   ensurePendingCart,
   getOrderByIdForUser,
   getUserOrderHistory,
-  listDeliveryAvailable,
   listDeliveryMine,
+  listOrderStatusHistory,
   buildKitchenOrdersWhere,
   listKitchenOrders,
   listNotificationsForInbox,
@@ -87,6 +103,8 @@ import {
   markOrderDelivered,
   notifyOrderPaid,
   OrderDomainError,
+  startOrderDelivering,
+  unassignOrderFromDelivery,
   updatePendingOrderLines,
   verifyMobilePaymentP2c,
   verifyPaymentByAdmin,
@@ -96,6 +114,7 @@ function makeOrder(overrides: Record<string, unknown> = {}) {
   return {
     createdAt: new Date(),
     deliveryUserId: null,
+    exchangeRate: null,
     id: 'o1',
     paidAt: null,
     paymentDate: null,
@@ -192,10 +211,16 @@ describe('orderService async flows', () => {
       };
     });
     txMocks.order.updateMany.mockResolvedValue({ count: 1 });
+    txMocks.orderStatusHistory.create.mockResolvedValue({});
     txMocks.payment.update.mockResolvedValue({});
     txMocks.payment.upsert.mockResolvedValue({});
     txMocks.productStore.updateMany.mockResolvedValue({ count: 1 });
     txMocks.product.updateMany.mockResolvedValue({ count: 1 });
+    txMocks.user.findUnique.mockResolvedValue({
+      address: 'Calle Falsa 123',
+      phone: '04141234567',
+      type: 'client',
+    });
   });
 
   describe('ensurePendingCart', () => {
@@ -272,7 +297,7 @@ describe('orderService async flows', () => {
       ).rejects.toMatchObject({ code: 'ORDER_NOT_FOUND', statusCode: 404 });
     });
 
-    it('confirms cash payment and updates order status', async () => {
+    it('confirms cash payment to paymentPendingConfirmation with payment record', async () => {
       setupProductLine();
       const pending = makeOrder({
         products: [
@@ -287,9 +312,12 @@ describe('orderService async flows', () => {
         ],
         totalAmount: new Prisma.Decimal(10),
       });
-      txMocks.order.findUnique
-        .mockResolvedValueOnce(pending)
-        .mockResolvedValueOnce({ ...pending, status: 'paymentConfirmed' });
+      const submitted = {
+        ...pending,
+        paymentScreenshotUrl: 'https://cdn/proof.jpg',
+        status: 'paymentPendingConfirmation',
+      };
+      txMocks.order.findUnique.mockResolvedValueOnce(pending).mockResolvedValue(submitted);
       txMocks.order.update.mockImplementation(async ({ data }) => ({
         ...pending,
         ...data,
@@ -297,11 +325,29 @@ describe('orderService async flows', () => {
       }));
 
       const result = await confirmPendingOrderPaymentWithDetails('u1', 'o1', {
+        deliveryAddress: 'Calle 123',
         method: 'cash',
+        screenshotUrl: 'https://cdn/proof.jpg',
       });
 
-      expect(result.order.status).toBe('paymentConfirmed');
-      expect(txMocks.payment.upsert).not.toHaveBeenCalled();
+      expect(result.order.status).toBe('paymentPendingConfirmation');
+      expect(txMocks.payment.upsert).toHaveBeenCalled();
+      expect(txMocks.order.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            deliveryAddress: 'Calle 123',
+            status: 'paymentPendingConfirmation',
+          }),
+        }),
+      );
+      expect(txMocks.orderStatusHistory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            fromStatus: 'pending',
+            toStatus: 'paymentPendingConfirmation',
+          }),
+        }),
+      );
     });
   });
 
@@ -378,8 +424,10 @@ describe('orderService async flows', () => {
   });
 
   describe('verifyPaymentByAdmin', () => {
-    it('confirms pending payment when verify is true', async () => {
-      txMocks.order.findUnique.mockResolvedValue(makeOrder());
+    it('confirms paymentPendingConfirmation when verify is true', async () => {
+      txMocks.order.findUnique.mockResolvedValue(
+        makeOrder({ status: 'paymentPendingConfirmation' }),
+      );
       txMocks.order.update.mockResolvedValue(makeOrder({ status: 'paymentConfirmed' }));
 
       const result = await verifyPaymentByAdmin('o1', 'admin-1', true);
@@ -390,14 +438,33 @@ describe('orderService async flows', () => {
           data: expect.objectContaining({ verifiedBy: 'admin-1' }),
         }),
       );
+      expect(txMocks.orderStatusHistory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            fromStatus: 'paymentPendingConfirmation',
+            toStatus: 'paymentConfirmed',
+          }),
+        }),
+      );
+    });
+
+    it('rejects verify when order is still pending', async () => {
+      txMocks.order.findUnique.mockResolvedValue(makeOrder({ status: 'pending' }));
+
+      await expect(verifyPaymentByAdmin('o1', 'admin-1', true)).rejects.toMatchObject({
+        code: 'INVALID_STATUS_TRANSITION',
+        statusCode: 400,
+      });
     });
 
     it('clears verification when verify is false', async () => {
-      txMocks.order.findUnique.mockResolvedValue(makeOrder());
+      txMocks.order.findUnique.mockResolvedValue(
+        makeOrder({ status: 'paymentPendingConfirmation' }),
+      );
 
       const result = await verifyPaymentByAdmin('o1', 'admin-1', false);
 
-      expect(result.status).toBe('pending');
+      expect(result.status).toBe('paymentPendingConfirmation');
       expect(txMocks.payment.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: { verifiedAt: null, verifiedBy: null },
@@ -407,20 +474,47 @@ describe('orderService async flows', () => {
   });
 
   describe('adminSetOrderStatus', () => {
-    it('allows pending to paymentConfirmed', async () => {
-      txMocks.order.findUnique
-        .mockResolvedValueOnce(makeOrder({ status: 'pending' }))
-        .mockResolvedValueOnce(makeOrder({ status: 'paymentConfirmed' }));
+    it('rejects pending to paymentConfirmed (use verify-payment)', async () => {
+      txMocks.order.findUnique.mockResolvedValue(makeOrder({ status: 'pending' }));
 
-      const result = await adminSetOrderStatus('o1', 'paymentConfirmed');
-
-      expect(result.status).toBe('paymentConfirmed');
+      await expect(adminSetOrderStatus('o1', 'paymentConfirmed', 'admin-1')).rejects.toMatchObject({
+        code: 'INVALID_STATUS_TRANSITION',
+      });
     });
 
     it('throws INVALID_STATUS_TRANSITION for invalid transition', async () => {
       txMocks.order.findUnique.mockResolvedValue(makeOrder({ status: 'pending' }));
 
-      await expect(adminSetOrderStatus('o1', 'delivered')).rejects.toBeInstanceOf(OrderDomainError);
+      await expect(adminSetOrderStatus('o1', 'delivered', 'admin-1')).rejects.toBeInstanceOf(
+        OrderDomainError,
+      );
+    });
+
+    it('persists cancellationReason when cancelling', async () => {
+      txMocks.order.findUnique
+        .mockResolvedValueOnce(makeOrder({ status: 'preparing' }))
+        .mockResolvedValueOnce(makeOrder({ cancellationReason: 'Sin stock', status: 'cancelled' }));
+
+      const result = await adminSetOrderStatus('o1', 'cancelled', 'admin-1', 'Sin stock');
+
+      expect(result.status).toBe('cancelled');
+      expect(txMocks.order.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            cancellationReason: 'Sin stock',
+            status: 'cancelled',
+          }),
+        }),
+      );
+    });
+
+    it('requires cancellationReason when cancelling', async () => {
+      txMocks.order.findUnique.mockResolvedValue(makeOrder({ status: 'preparing' }));
+
+      await expect(adminSetOrderStatus('o1', 'cancelled', 'admin-1')).rejects.toMatchObject({
+        code: 'CANCELLATION_REASON_REQUIRED',
+        statusCode: 400,
+      });
     });
   });
 
@@ -452,58 +546,202 @@ describe('orderService async flows', () => {
   });
 
   describe('delivery listings', () => {
-    it('listDeliveryAvailable returns ready orders', async () => {
+    it('listDeliveryMine returns assigned and delivering orders', async () => {
       const prisma = (await import('../../prisma.js')).default;
       vi.mocked(prisma.order.findMany).mockResolvedValue([
-        makeOrder({ status: 'readyForDelivery' }),
-      ]);
-      vi.mocked(prisma.order.count).mockResolvedValue(1);
-
-      const result = await listDeliveryAvailable(1, 10);
-      expect(result.total).toBe(1);
-      expect(result.data[0].status).toBe('readyForDelivery');
-    });
-
-    it('listDeliveryMine returns driver orders', async () => {
-      const prisma = (await import('../../prisma.js')).default;
-      vi.mocked(prisma.order.findMany).mockResolvedValue([
-        makeOrder({ deliveryUserId: 'driver-1', status: 'outForDelivery' }),
-      ]);
+        {
+          ...makeOrder({ deliveryUserId: 'driver-1', status: 'assignedToDeliveryDriver' }),
+          user: { address: 'Av. Principal', phone: '04140001122' },
+        },
+      ] as never);
       vi.mocked(prisma.order.count).mockResolvedValue(1);
 
       const result = await listDeliveryMine('driver-1', 1, 10);
-      expect(result.data[0].status).toBe('outForDelivery');
+      expect(result.data[0].status).toBe('assignedToDeliveryDriver');
+      expect(result.data[0].deliveryAddress).toBe('Av. Principal');
+      expect(result.data[0].deliveryPhone).toBe('04140001122');
+    });
+
+    it('listDeliveryMine prefers order delivery fields over user profile', async () => {
+      const prisma = (await import('../../prisma.js')).default;
+      vi.mocked(prisma.order.findMany).mockResolvedValue([
+        {
+          ...makeOrder({
+            deliveryAddress: 'Direccion pedido',
+            deliveryPhone: '04241234567',
+            deliveryUserId: 'driver-1',
+            status: 'delivering',
+          }),
+          user: { address: 'Perfil', phone: '04140001122' },
+        },
+      ] as never);
+      vi.mocked(prisma.order.count).mockResolvedValue(1);
+
+      const result = await listDeliveryMine('driver-1', 1, 10);
+      expect(result.data[0].deliveryAddress).toBe('Direccion pedido');
+      expect(result.data[0].deliveryPhone).toBe('04241234567');
     });
   });
 
-  describe('claimDeliveryOrder', () => {
-    it('claims ready order for delivery driver', async () => {
-      txMocks.order.updateMany.mockResolvedValue({ count: 1 });
-      txMocks.order.findUnique.mockResolvedValue(
-        makeOrder({ deliveryUserId: 'driver-1', status: 'outForDelivery' }),
+  describe('listOrderStatusHistory', () => {
+    it('includes deliveryProofUrl only on delivered entries', async () => {
+      const prisma = (await import('../../prisma.js')).default;
+      vi.mocked(prisma.order.findUnique).mockResolvedValue(
+        makeOrder({
+          deliveryProofUrl: 'https://cdn/proof.jpg',
+          status: 'delivered',
+        }),
       );
+      vi.mocked(prisma.orderStatusHistory.findMany).mockResolvedValue([
+        {
+          changedBy: {
+            email: 'a@test.com',
+            firstName: 'Ana',
+            id: 'u1',
+            lastName: 'Admin',
+            type: 'admin',
+          },
+          createdAt: new Date('2026-07-15T12:00:00.000Z'),
+          fromStatus: 'delivering',
+          id: 'h1',
+          toStatus: 'delivered',
+        },
+        {
+          changedBy: {
+            email: 'a@test.com',
+            firstName: 'Ana',
+            id: 'u1',
+            lastName: 'Admin',
+            type: 'admin',
+          },
+          createdAt: new Date('2026-07-15T11:00:00.000Z'),
+          fromStatus: 'readyForDelivery',
+          id: 'h0',
+          toStatus: 'assignedToDeliveryDriver',
+        },
+      ] as never);
 
-      const result = await claimDeliveryOrder('o1', 'driver-1');
-      expect(result.status).toBe('outForDelivery');
+      const result = await listOrderStatusHistory('o1');
+      expect(result[0].deliveryProofUrl).toBe('https://cdn/proof.jpg');
+      expect(result[0].cancellationReason).toBeNull();
+      expect(result[1].deliveryProofUrl).toBeNull();
     });
 
-    it('throws ORDER_NOT_AVAILABLE when claim fails', async () => {
-      txMocks.order.updateMany.mockResolvedValue({ count: 0 });
+    it('includes cancellationReason only on cancelled entries', async () => {
+      const prisma = (await import('../../prisma.js')).default;
+      vi.mocked(prisma.order.findUnique).mockResolvedValue(
+        makeOrder({
+          cancellationReason: 'Cliente no responde',
+          status: 'cancelled',
+        }),
+      );
+      vi.mocked(prisma.orderStatusHistory.findMany).mockResolvedValue([
+        {
+          changedBy: {
+            email: 'a@test.com',
+            firstName: 'Ana',
+            id: 'u1',
+            lastName: 'Admin',
+            type: 'admin',
+          },
+          createdAt: new Date('2026-07-15T12:00:00.000Z'),
+          fromStatus: 'preparing',
+          id: 'h1',
+          toStatus: 'cancelled',
+        },
+        {
+          changedBy: {
+            email: 'a@test.com',
+            firstName: 'Ana',
+            id: 'u1',
+            lastName: 'Admin',
+            type: 'admin',
+          },
+          createdAt: new Date('2026-07-15T11:00:00.000Z'),
+          fromStatus: 'paymentConfirmed',
+          id: 'h0',
+          toStatus: 'preparing',
+        },
+      ] as never);
 
-      await expect(claimDeliveryOrder('o1', 'driver-1')).rejects.toMatchObject({
-        code: 'ORDER_NOT_AVAILABLE',
-        statusCode: 409,
+      const result = await listOrderStatusHistory('o1');
+      expect(result[0].cancellationReason).toBe('Cliente no responde');
+      expect(result[1].cancellationReason).toBeNull();
+    });
+  });
+
+  describe('assignOrderToDelivery', () => {
+    it('assigns ready order to delivery driver', async () => {
+      txMocks.user.findUnique.mockResolvedValue({ id: 'driver-1', type: 'deliveryDriver' });
+      txMocks.order.findUnique
+        .mockResolvedValueOnce(makeOrder({ status: 'readyForDelivery' }))
+        .mockResolvedValueOnce(
+          makeOrder({ deliveryUserId: 'driver-1', status: 'assignedToDeliveryDriver' }),
+        );
+      txMocks.order.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await assignOrderToDelivery('o1', 'driver-1', 'admin-1');
+      expect(result.status).toBe('assignedToDeliveryDriver');
+      expect(txMocks.orderStatusHistory.create).toHaveBeenCalled();
+    });
+
+    it('rejects non-driver user', async () => {
+      txMocks.user.findUnique.mockResolvedValue({ id: 'u1', type: 'client' });
+
+      await expect(assignOrderToDelivery('o1', 'u1', 'admin-1')).rejects.toMatchObject({
+        code: 'INVALID_DELIVERY_DRIVER',
+        statusCode: 400,
       });
     });
   });
 
+  describe('unassignOrderFromDelivery', () => {
+    it('returns order to readyForDelivery', async () => {
+      txMocks.order.findUnique
+        .mockResolvedValueOnce(
+          makeOrder({ deliveryUserId: 'driver-1', status: 'assignedToDeliveryDriver' }),
+        )
+        .mockResolvedValueOnce(makeOrder({ deliveryUserId: null, status: 'readyForDelivery' }));
+      txMocks.order.updateMany.mockResolvedValue({ count: 1 });
+
+      const result = await unassignOrderFromDelivery('o1', 'admin-1');
+      expect(result.status).toBe('readyForDelivery');
+    });
+  });
+
+  describe('startOrderDelivering', () => {
+    it('starts delivery for assigned driver', async () => {
+      txMocks.order.updateMany.mockResolvedValue({ count: 1 });
+      txMocks.order.findUnique.mockResolvedValue(
+        makeOrder({ deliveryUserId: 'driver-1', status: 'delivering' }),
+      );
+
+      const result = await startOrderDelivering('deliveryDriver', 'o1', 'driver-1');
+      expect(result.status).toBe('delivering');
+    });
+  });
+
   describe('markOrderDelivered', () => {
-    it('marks order delivered for delivery driver', async () => {
+    it('marks order delivered for delivery driver with proof', async () => {
       txMocks.order.updateMany.mockResolvedValue({ count: 1 });
       txMocks.order.findUnique.mockResolvedValue(makeOrder({ status: 'delivered' }));
 
-      const result = await markOrderDelivered('deliveryDriver', 'o1', 'driver-1');
+      const result = await markOrderDelivered(
+        'deliveryDriver',
+        'o1',
+        'driver-1',
+        'https://cdn/proof.jpg',
+      );
       expect(result.status).toBe('delivered');
+    });
+
+    it('requires delivery proof url', async () => {
+      await expect(
+        markOrderDelivered('deliveryDriver', 'o1', 'driver-1', ''),
+      ).rejects.toMatchObject({
+        code: 'DELIVERY_PROOF_REQUIRED',
+        statusCode: 400,
+      });
     });
   });
 
@@ -654,9 +892,10 @@ describe('orderService async flows', () => {
       vi.mocked(prisma.order.findMany).mockResolvedValue([
         {
           ...makeOrder({ status: 'paymentConfirmed' }),
+          deliveryUser: null,
           payment: null,
           store: { name: 'Store 1' },
-          user: { numberId: 'V123' },
+          user: { address: 'Av. Perfil', numberId: 'V123', phone: '04140001122' },
           products: [
             {
               code: 'SKU1',
@@ -680,20 +919,56 @@ describe('orderService async flows', () => {
       expect(result.total).toBe(1);
       expect(result.data[0].storeName).toBe('Store 1');
       expect(result.data[0].userNumberId).toBe('V123');
+      expect(result.data[0].deliveryAddress).toBe('Av. Perfil');
+      expect(result.data[0].deliveryPhone).toBe('04140001122');
+      expect(result.data[0].deliveryUserName).toBeNull();
+      expect(result.data[0].deliveryUserPhone).toBeNull();
+    });
+
+    it('includes delivery driver name and phone when assigned', async () => {
+      const prisma = (await import('../../prisma.js')).default;
+      vi.mocked(prisma.order.findMany).mockResolvedValue([
+        {
+          ...makeOrder({
+            deliveryAddress: 'Direccion pedido',
+            deliveryPhone: '04241234567',
+            deliveryUserId: 'driver-1',
+            status: 'delivering',
+          }),
+          deliveryUser: {
+            firstName: 'Jose',
+            lastName: 'Perez',
+            phone: '04141234567',
+          },
+          payment: null,
+          store: { name: 'Altochama' },
+          user: { address: 'Av. Perfil', numberId: '17322319', phone: '04140001122' },
+          products: [],
+        },
+      ] as never);
+      vi.mocked(prisma.order.count).mockResolvedValue(1);
+      vi.mocked(prisma.product.findMany).mockResolvedValue([]);
+
+      const result = await listKitchenOrders(1, 10, 'admin');
+
+      expect(result.data[0].deliveryUserName).toBe('Jose Perez');
+      expect(result.data[0].deliveryUserPhone).toBe('04141234567');
+      expect(result.data[0].deliveryAddress).toBe('Direccion pedido');
+      expect(result.data[0].deliveryPhone).toBe('04241234567');
     });
   });
 
   describe('buildKitchenOrdersWhere', () => {
-    it('excludes pending and cancelled when status is all', () => {
+    it('excludes only pending when status is all (includes cancelled)', () => {
       expect(buildKitchenOrdersWhere({ status: 'all' })).toEqual({
-        status: { notIn: ['pending', 'cancelled'] },
+        status: { notIn: ['pending'] },
       });
     });
 
     it('filters by case-sensitive id contains', () => {
       expect(buildKitchenOrdersWhere({ id: 'ABC' })).toEqual({
         id: { contains: 'ABC' },
-        status: { notIn: ['pending', 'cancelled'] },
+        status: { notIn: ['pending'] },
       });
     });
 
@@ -709,14 +984,29 @@ describe('orderService async flows', () => {
       });
     });
 
-    it('filters by createdAt range with start and end of day', () => {
-      const createdFrom = new Date(2026, 6, 1, 15, 30);
-      const createdTo = new Date(2026, 6, 13, 8, 0);
+    it('filters by createdAt range using Caracas half-open business days', () => {
+      const createdFrom = new Date('2026-07-01T00:00:00.000Z');
+      const createdTo = new Date('2026-07-15T00:00:00.000Z');
       const where = buildKitchenOrdersWhere({ createdFrom, createdTo });
 
-      expect(where.createdAt?.gte).toEqual(new Date(2026, 6, 1, 0, 0, 0, 0));
-      expect(where.createdAt?.lte).toEqual(new Date(2026, 6, 13, 23, 59, 59, 999));
-      expect(where.status).toEqual({ notIn: ['pending', 'cancelled'] });
+      expect(where.createdAt?.gte?.toISOString()).toBe('2026-07-01T04:00:00.000Z');
+      expect(where.createdAt?.lt?.toISOString()).toBe('2026-07-16T04:00:00.000Z');
+      expect(where.status).toEqual({ notIn: ['pending'] });
+    });
+
+    it('today window includes 15/07 afternoon Caracas and excludes 14/07 afternoon', () => {
+      const createdFrom = new Date('2026-07-15T00:00:00.000Z');
+      const createdTo = new Date('2026-07-15T00:00:00.000Z');
+      const where = buildKitchenOrdersWhere({ createdFrom, createdTo });
+      const start = where.createdAt?.gte as Date;
+      const endExclusive = where.createdAt?.lt as Date;
+
+      const july15Afternoon = new Date('2026-07-15T18:38:07.000Z');
+      const july14Afternoon = new Date('2026-07-14T18:40:17.000Z');
+
+      expect(july15Afternoon.getTime()).toBeGreaterThanOrEqual(start.getTime());
+      expect(july15Afternoon.getTime()).toBeLessThan(endExclusive.getTime());
+      expect(july14Afternoon.getTime()).toBeLessThan(start.getTime());
     });
 
     it('passes filters to prisma findMany', async () => {
@@ -914,7 +1204,7 @@ describe('orderService async flows', () => {
     it('throws ORDER_NOT_CANCELLABLE for delivered order', async () => {
       txMocks.order.findUnique.mockResolvedValue(makeOrder({ status: 'delivered' }));
 
-      await expect(adminSetOrderStatus('o1', 'cancelled')).rejects.toMatchObject({
+      await expect(adminSetOrderStatus('o1', 'cancelled', 'admin-1')).rejects.toMatchObject({
         code: 'ORDER_NOT_CANCELLABLE',
         statusCode: 400,
       });
@@ -924,7 +1214,7 @@ describe('orderService async flows', () => {
       txMocks.order.findUnique.mockResolvedValue(makeOrder({ status: 'paymentConfirmed' }));
       txMocks.order.updateMany.mockResolvedValue({ count: 0 });
 
-      await expect(adminSetOrderStatus('o1', 'preparing')).rejects.toMatchObject({
+      await expect(adminSetOrderStatus('o1', 'preparing', 'admin-1')).rejects.toMatchObject({
         code: 'ORDER_CONFLICT',
         statusCode: 409,
       });
@@ -1006,14 +1296,21 @@ describe('orderService async flows', () => {
       txMocks.order.updateMany.mockResolvedValue({ count: 1 });
       txMocks.order.findUnique.mockResolvedValue(makeOrder({ status: 'delivered' }));
 
-      const result = await markOrderDelivered('superAdmin', 'o1', 'admin-1');
+      const result = await markOrderDelivered(
+        'superAdmin',
+        'o1',
+        'admin-1',
+        'https://cdn/proof.jpg',
+      );
       expect(result.status).toBe('delivered');
     });
 
     it('throws ORDER_NOT_IN_DELIVERY when update fails', async () => {
       txMocks.order.updateMany.mockResolvedValue({ count: 0 });
 
-      await expect(markOrderDelivered('deliveryDriver', 'o1', 'driver-1')).rejects.toMatchObject({
+      await expect(
+        markOrderDelivered('deliveryDriver', 'o1', 'driver-1', 'https://cdn/proof.jpg'),
+      ).rejects.toMatchObject({
         code: 'ORDER_NOT_IN_DELIVERY',
         statusCode: 409,
       });

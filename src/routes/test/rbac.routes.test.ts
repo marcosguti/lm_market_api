@@ -64,5 +64,13 @@ describe('RBAC routes', () => {
       expect(res.status).not.toBe(401);
       expect(res.status).not.toBe(403);
     });
+
+    it('exposes usdRate from exchange rate service', async () => {
+      const res = await request(app).get('/api/payments/config');
+      expect(res.status).toBe(200);
+      expect(res.body.usdRate).toBe(600);
+      expect(res.body).toHaveProperty('usdRateUpdatedAt');
+      expect(res.body).toHaveProperty('usdRateSource');
+    });
   });
 });

@@ -1,3 +1,5 @@
+import { getUsdVesRate } from '../services/bcvExchangeRate.js';
+
 export const megasoftCertP2cPayload = {
   clientBankCode: '0105',
   clientPhone: '04125555444',
@@ -5,11 +7,16 @@ export const megasoftCertP2cPayload = {
   merchantPhone: '04121234567',
 } as const;
 
-export function resolveMegasoftAmount(orderAmount: number): number {
+export function convertUsdToBs(orderAmount: number, usdRate: number): number {
+  return Number((orderAmount * usdRate).toFixed(2));
+}
+
+export async function resolveMegasoftAmount(orderAmount: number): Promise<number> {
   if (megasoftConfig.amountOverride !== null) {
     return megasoftConfig.amountOverride;
   }
-  return Number((orderAmount * megasoftConfig.usdPrice).toFixed(2));
+  const usdRate = await getUsdVesRate();
+  return convertUsdToBs(orderAmount, usdRate);
 }
 
 function parseBool(value: string | undefined, defaultValue = false): boolean {
@@ -50,6 +57,7 @@ export const megasoftConfig = {
     .map((c) => c.trim())
     .filter(Boolean),
   tlsInsecure: parseBool(process.env.MEGASOFT_TLS_INSECURE, true),
+  /** Fallback / bootstrap rate from env; live rate comes from ExchangeRate via getUsdVesRate. */
   usdPrice: parseUsdPrice(process.env.USD_PRICE),
   user: process.env.MEGASOFT_USER ?? '',
 };

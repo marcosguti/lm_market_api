@@ -1,0 +1,63 @@
+---
+description: Nombrar migraciones Prisma con verbo y verificar updateDB en cambios de schema/datos
+alwaysApply: true
+---
+
+# Migraciones Prisma + updateDB
+
+## Nombres de migraciones Prisma
+
+Cada carpeta en `prisma/migrations/` debe ser:
+
+`YYYYMMDDHHMMSS_<verbo>_<descripcion_snake_case>`
+
+Verbos permitidos (elige el que describe la acción):
+
+- `add_` — columnas, tablas, índices, enums nuevos
+- `update_` — cambios de datos/defaults/constraints sin rename
+- `rename_` — renombrar columnas, tablas, enums o valores
+- `drop_` / `remove_` — eliminar columnas, tablas, índices
+- `backfill_` — solo datos históricos
+
+Buenos ejemplos:
+
+- `20260715140000_add_order_cancellation_reason`
+- `20260608120000_rename_status_payment_enums`
+- `20260610120000_add_deals_table`
+
+Malos ejemplos (sin verbo o ambiguos):
+
+- `order_status_history_delivery_flow`
+- `fix_orders`
+- `schema_changes`
+
+El SQL interno debe coincidir con el nombre (si el nombre dice `add_X`, el SQL agrega `X`).
+
+## Checklist updateDB (obligatorio en cambios API)
+
+Antes de dar por terminado un cambio que toque schema Prisma, datos semilla o higiene de DB:
+
+1. **¿Hace falta Prisma migration?** Si cambió `prisma/schema.prisma` → crear migración con el naming de arriba.
+2. **¿Hace falta `src/updateDB`?** Añade o actualiza una entrada versionada en [`src/updateDB/index.ts`](src/updateDB/index.ts) cuando:
+   - Hay columnas/índices que ambientes existentes deben asegurar con `IF NOT EXISTS` (idempotente), o
+   - Hay backfill / limpieza de datos que no cubre solo el SQL de Prisma, o
+   - Deploy usa `npm run updateDB` además de `runMigration`.
+3. **Si no hace falta updateDB**, indícalo explícitamente al cerrar el trabajo (ej. “solo Prisma migration; sin updateDB”).
+4. **Nunca** asumas que `prisma migrate` sola deja prod al día si el repo ya usa `updateDB` para higiene.
+
+Patrón updateDB:
+
+```ts
+{
+  name: 'Add Order.cancellationReason',
+  up: async (tx) => {
+    await tx.$executeRaw`
+      ALTER TABLE "Order"
+      ADD COLUMN IF NOT EXISTS "cancellationReason" TEXT
+    `;
+  },
+  version: N, // siguiente entero libre
+}
+```
+
+Deploy típico tras schema: `npm run runMigration && npm run updateDB`.

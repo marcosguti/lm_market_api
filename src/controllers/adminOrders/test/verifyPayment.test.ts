@@ -5,11 +5,13 @@ import type { AuthRequest } from '../../../middlewares/auth.js';
 import { verifyPayment } from '../verifyPayment.js';
 
 const verifyPaymentByAdmin = vi.fn();
+const notifyOrderPaid = vi.fn();
 
 vi.mock('../../../services/orderService.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../services/orderService.js')>();
   return {
     ...actual,
+    notifyOrderPaid: (...args: unknown[]) => notifyOrderPaid(...args),
     verifyPaymentByAdmin: (...args: unknown[]) => verifyPaymentByAdmin(...args),
   };
 });
@@ -56,7 +58,7 @@ describe('verifyPayment controller', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('returns order when verification succeeds', async () => {
+  it('returns order when verification succeeds and notifies kitchen', async () => {
     const req = {
       body: { verify: true },
       params: { id: 'o1' },
@@ -66,6 +68,10 @@ describe('verifyPayment controller', () => {
     await verifyPayment(req, res);
     expect(res.statusCode).toBe(200);
     expect(verifyPaymentByAdmin).toHaveBeenCalledWith('o1', 'admin-1', true);
+    expect(notifyOrderPaid).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'o1', status: 'paymentConfirmed' }),
+      'paymentPendingConfirmation',
+    );
   });
 
   it('maps OrderDomainError to HTTP status', async () => {

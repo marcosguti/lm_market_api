@@ -7,9 +7,15 @@ import type { AuthRequest } from '../../middlewares/auth.js';
 import { megasoftConfig } from '../../config/megasoft.js';
 import { uploadPaymentScreenshot } from '../../libs/filesInDigitalOcean/index.js';
 import {
+  emitKitchenOrderUpdated,
+  emitOrderUpdated,
+  emitUserNotification,
+} from '../../realtime/socket.js';
+import {
   confirmPendingOrderPaymentWithDetails,
-  notifyOrderPaid,
+  createOrderStatusNotification,
 } from '../../services/orderService.js';
+import { formatOrderStatusChangeBody } from '../../utils/orderStatusLabels.js';
 import { getParam, handleOrderError } from '../shared/orderHttp.js';
 import { asClient } from './asClient.js';
 import { confirmPaymentSchema } from './schemas.js';
@@ -25,13 +31,14 @@ export async function confirmOrderPayment(req: AuthRequest, res: Response): Prom
   }
 
   const file = req.file;
-  const { method, paidAt, reference } = req.body as {
+  const { deliveryAddress, method, paidAt, reference } = req.body as {
+    deliveryAddress?: string;
     method?: string;
     paidAt?: string;
     reference?: string;
   };
 
-  const validation = confirmPaymentSchema.validate({ method, paidAt, reference });
+  const validation = confirmPaymentSchema.validate({ deliveryAddress, method, paidAt, reference });
   if (validation.error) {
     res.status(400).json({ error: validation.error.message });
     return;
@@ -45,17 +52,13 @@ export async function confirmOrderPayment(req: AuthRequest, res: Response): Prom
     return;
   }
 
-  const isCash = validation.value.method === 'cash';
-
-  if (!isCash && !file) {
+  if (!file) {
     res.status(400).json({ error: 'El comprobante de pago es requerido' });
     return;
   }
 
   let paidAtDate: Date | null = null;
-  let screenshotUrl: null | string = null;
-
-  if (!isCash && paidAt) {
+  if (paidAt) {
     paidAtDate = new Date(paidAt);
     const now = new Date();
     const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -65,21 +68,36 @@ export async function confirmOrderPayment(req: AuthRequest, res: Response): Prom
     }
   }
 
-  if (!isCash && file) {
-    const fileName = uuidv4();
-    const ext = file.mimetype.split('/')[1] ?? 'jpg';
-    screenshotUrl = await uploadPaymentScreenshot(file.buffer, file.mimetype, ext, fileName);
-  }
+  const fileName = uuidv4();
+  const ext = file.mimetype.split('/')[1] ?? 'jpg';
+  const screenshotUrl = await uploadPaymentScreenshot(file.buffer, file.mimetype, ext, fileName);
 
   try {
     const result = await confirmPendingOrderPaymentWithDetails(userId, orderId, {
+      deliveryAddress: validation.value.deliveryAddress ?? null,
       method: validation.value.method,
-      paidAt: isCash ? null : paidAtDate,
-      reference: isCash ? null : (validation.value.reference ?? null),
+      paidAt: paidAtDate,
+      reference: validation.value.reference ?? null,
       screenshotUrl,
     });
 
-    await notifyOrderPaid(result.order);
+    await createOrderStatusNotification(result.order, 'pending');
+    emitUserNotification(result.order.userId, {
+      body: formatOrderStatusChangeBody('pending', result.order.status),
+      newStatus: result.order.status,
+      orderId: result.order.id,
+      previousStatus: 'pending',
+      status: result.order.status,
+      title: 'Actualización de orden',
+      type: 'ORDER_STATUS_CHANGED',
+    });
+    const orderPayload = {
+      id: result.order.id,
+      status: result.order.status,
+      totalAmount: result.order.totalAmount,
+    };
+    emitOrderUpdated(result.order.userId, orderPayload);
+    emitKitchenOrderUpdated(orderPayload);
 
     res.json(result);
   } catch (err) {

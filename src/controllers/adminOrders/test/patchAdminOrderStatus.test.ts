@@ -2,6 +2,8 @@ import type { Response } from 'express';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AuthRequest } from '../../../middlewares/auth.js';
+import { sendOrderCancelledEmail } from '../../../libs/sendEmail/index.js';
+import { findUserById } from '../../../queries/user.js';
 import { OrderDomainError } from '../../../services/orderService.js';
 import { patchAdminOrderStatus } from '../../adminOrders/patchAdminOrderStatus.js';
 
@@ -14,6 +16,14 @@ vi.mock('../../../realtime/socket.js', () => ({
   emitOrderCancelled: vi.fn(),
   emitOrderUpdated: vi.fn(),
   emitUserNotification: vi.fn(),
+}));
+
+vi.mock('../../../libs/sendEmail/index.js', () => ({
+  sendOrderCancelledEmail: vi.fn(),
+}));
+
+vi.mock('../../../queries/user.js', () => ({
+  findUserById: vi.fn(),
 }));
 
 vi.mock('../../../services/orderService.js', async (importOriginal) => {
@@ -60,6 +70,12 @@ describe('patchAdminOrderStatus controller', () => {
       products: [],
     });
     createOrderStatusNotification.mockResolvedValue(undefined);
+    vi.mocked(findUserById).mockResolvedValue({
+      email: 'client@test.com',
+      firstName: 'Cliente',
+      id: 'client-1',
+    } as never);
+    vi.mocked(sendOrderCancelledEmail).mockResolvedValue(undefined);
   });
 
   it('returns 400 for invalid status value', async () => {
@@ -88,12 +104,66 @@ describe('patchAdminOrderStatus controller', () => {
     const req = {
       body: { status: 'preparing' },
       params: { id: 'o1' },
+      userId: 'admin-1',
     } as AuthRequest;
     const res = mockRes();
     await patchAdminOrderStatus(req, res);
     expect(res.statusCode).toBe(200);
-    expect(adminSetOrderStatus).toHaveBeenCalledWith('o1', 'preparing');
+    expect(adminSetOrderStatus).toHaveBeenCalledWith('o1', 'preparing', 'admin-1', undefined);
     expect(createOrderStatusNotification).toHaveBeenCalled();
+  });
+
+  it('cancels with reason and sends email to client', async () => {
+    adminSetOrderStatus.mockResolvedValue({
+      id: 'a5350180-1234-5678-9abc-def012345678',
+      status: 'cancelled',
+      userId: 'client-1',
+      deliveryUserId: null,
+      totalAmount: 10,
+      products: [],
+      cancellationReason: 'Sin stock del producto',
+    });
+    const req = {
+      body: { status: 'cancelled', cancellationReason: 'Sin stock del producto' },
+      params: { id: 'a5350180-1234-5678-9abc-def012345678' },
+      userId: 'admin-1',
+    } as AuthRequest;
+    const res = mockRes();
+    await patchAdminOrderStatus(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(adminSetOrderStatus).toHaveBeenCalledWith(
+      'a5350180-1234-5678-9abc-def012345678',
+      'cancelled',
+      'admin-1',
+      'Sin stock del producto',
+    );
+    expect(sendOrderCancelledEmail).toHaveBeenCalledWith({
+      email: 'client@test.com',
+      firstName: 'Cliente',
+      reason: 'Sin stock del producto',
+      shortOrderId: '#a5350180',
+    });
+  });
+
+  it('still returns 200 if cancellation email fails', async () => {
+    adminSetOrderStatus.mockResolvedValue({
+      id: 'o1',
+      status: 'cancelled',
+      userId: 'client-1',
+      deliveryUserId: null,
+      totalAmount: 10,
+      products: [],
+      cancellationReason: 'Error de inventario',
+    });
+    vi.mocked(sendOrderCancelledEmail).mockRejectedValue(new Error('mailjet down'));
+    const req = {
+      body: { status: 'cancelled', cancellationReason: 'Error de inventario' },
+      params: { id: 'o1' },
+      userId: 'admin-1',
+    } as AuthRequest;
+    const res = mockRes();
+    await patchAdminOrderStatus(req, res);
+    expect(res.statusCode).toBe(200);
   });
 
   it('maps OrderDomainError to HTTP status', async () => {
@@ -101,8 +171,9 @@ describe('patchAdminOrderStatus controller', () => {
       new OrderDomainError('INVALID_STATUS_TRANSITION', 'Transición inválida', 400),
     );
     const req = {
-      body: { status: 'delivered' },
+      body: { status: 'readyForDelivery' },
       params: { id: 'o1' },
+      userId: 'admin-1',
     } as AuthRequest;
     const res = mockRes();
     await patchAdminOrderStatus(req, res);

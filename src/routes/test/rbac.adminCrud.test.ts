@@ -24,29 +24,35 @@ describe('RBAC admin CRUD routes', () => {
     resetQueryMocks();
   });
 
-  describe.each(['/api/admin/products', '/api/admin/banners', '/api/admin/deals'])(
-    'GET %s (admin/superAdmin)',
-    (path) => {
-      it('returns 401 without token', async () => {
-        await expectUnauthorized(app, 'get', path);
-      });
+  describe.each([
+    '/api/admin/products',
+    '/api/admin/banners',
+    '/api/admin/blog-articles',
+    '/api/admin/deals',
+  ])('GET %s (admin/superAdmin)', (path) => {
+    it('returns 401 without token', async () => {
+      await expectUnauthorized(app, 'get', path);
+    });
 
-      it.each(ALL_ROLES.filter((r) => r !== 'admin' && r !== 'superAdmin'))(
-        'returns 403 for %s',
-        async (role) => {
-          await expectForbidden(app, 'get', path, role as UserType);
-        },
-      );
+    it.each(ALL_ROLES.filter((r) => r !== 'admin' && r !== 'superAdmin'))(
+      'returns 403 for %s',
+      async (role) => {
+        await expectForbidden(app, 'get', path, role as UserType);
+      },
+    );
 
-      it.each(ADMIN_ROLES)('allows %s', async (role) => {
-        await expectAllowed(app, 'get', path, role, { expectedStatus: 200 });
-      });
-    },
-  );
+    it.each(ADMIN_ROLES)('allows %s', async (role) => {
+      await expectAllowed(app, 'get', path, role, { expectedStatus: 200 });
+    });
+  });
 
   describe.each([
     { path: '/api/admin/products', body: { code: 'X', name: 'P', price: 1, storeId: 's1' } },
     { path: '/api/admin/banners', body: { title: 'B', active: true } },
+    {
+      path: '/api/admin/blog-articles',
+      body: { title: 'Post', content: '<p>Hola</p>', active: true },
+    },
     { path: '/api/admin/deals', body: { title: 'D', active: true } },
   ])('POST $path (admin/superAdmin)', ({ path, body }) => {
     it('returns 401 without token', async () => {
@@ -68,6 +74,7 @@ describe('RBAC admin CRUD routes', () => {
   describe.each([
     { path: '/api/admin/products', body: { name: 'Updated' } },
     { path: '/api/admin/banners', body: { title: 'Updated' } },
+    { path: '/api/admin/blog-articles', body: { title: 'Updated' } },
     { path: '/api/admin/deals', body: { title: 'Updated' } },
   ])('PATCH $path/:id (admin/superAdmin)', ({ path, body }) => {
     it('returns 401 without token', async () => {
@@ -95,29 +102,31 @@ describe('RBAC admin CRUD routes', () => {
     });
   });
 
-  describe.each(['/api/admin/products', '/api/admin/banners', '/api/admin/deals'])(
-    'DELETE %s/:id (admin/superAdmin)',
-    (path) => {
-      it('returns 401 without token', async () => {
-        await expectUnauthorized(app, 'delete', path, { pathParams: { id: 'item-1' } });
-      });
+  describe.each([
+    '/api/admin/products',
+    '/api/admin/banners',
+    '/api/admin/blog-articles',
+    '/api/admin/deals',
+  ])('DELETE %s/:id (admin/superAdmin)', (path) => {
+    it('returns 401 without token', async () => {
+      await expectUnauthorized(app, 'delete', path, { pathParams: { id: 'item-1' } });
+    });
 
-      it.each(ALL_ROLES.filter((r) => r !== 'admin' && r !== 'superAdmin'))(
-        'returns 403 for %s',
-        async (role) => {
-          await expectForbidden(app, 'delete', path, role as UserType, {
-            pathParams: { id: 'item-1' },
-          });
-        },
-      );
-
-      it.each(ADMIN_ROLES)('allows %s', async (role) => {
-        await expectAllowed(app, 'delete', path, role, {
+    it.each(ALL_ROLES.filter((r) => r !== 'admin' && r !== 'superAdmin'))(
+      'returns 403 for %s',
+      async (role) => {
+        await expectForbidden(app, 'delete', path, role as UserType, {
           pathParams: { id: 'item-1' },
         });
+      },
+    );
+
+    it.each(ADMIN_ROLES)('allows %s', async (role) => {
+      await expectAllowed(app, 'delete', path, role, {
+        pathParams: { id: 'item-1' },
       });
-    },
-  );
+    });
+  });
 
   describe('POST /api/admin/users (admin/superAdmin)', () => {
     const body = {

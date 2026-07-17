@@ -24,10 +24,12 @@ enum NumberIdType {
 
 enum OrderStatus {
   pending
+  paymentPendingConfirmation
   paymentConfirmed
   preparing
   readyForDelivery
-  outForDelivery
+  assignedToDeliveryDriver
+  delivering
   delivered
   cancelled
 }
@@ -59,6 +61,7 @@ model User {
   notifications          Notification[]
   orders                 Order[]
   deliveryAssignments    Order[]                 @relation("OrderDeliveryUser")
+  orderStatusChanges     OrderStatusHistory[]
   passwordResetTokens    PasswordResetToken[]
   emailVerificationCodes EmailVerificationCode[]
   tokens                 Token[]
@@ -159,6 +162,18 @@ model ProductStore {
   @@index([storeId])
 }
 
+model ExchangeRate {
+  id        String   @id @default(uuid())
+  pair      String   @unique @db.VarChar(16)
+  rate      Decimal  @db.Decimal(14, 8)
+  source    String   @db.VarChar(32)
+  fetchedAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([pair])
+}
+
 model Order {
   id                   String         @id @default(uuid())
   userId               String
@@ -166,6 +181,7 @@ model Order {
   status               OrderStatus    @default(pending)
   products             Json           @default("[]")
   totalAmount          Decimal        @db.Decimal(14, 2)
+  exchangeRate         Decimal?       @db.Decimal(14, 8)
   confirmationCode     String?        @unique
   paidAt               DateTime?
   deliveryUserId       String?
@@ -180,17 +196,35 @@ model Order {
   paymentReference     String?
   paymentDate          DateTime?
   paymentScreenshotUrl String?
+  deliveryProofUrl     String?
+  cancellationReason   String?
 
-  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  deliveryUser  User?          @relation("OrderDeliveryUser", fields: [deliveryUserId], references: [id])
-  store         Store?         @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveryUser  User?                @relation("OrderDeliveryUser", fields: [deliveryUserId], references: [id])
+  store         Store?               @relation(fields: [storeId], references: [id], onDelete: SetNull)
   notifications Notification[]
   payment       Payment?
+  statusHistory OrderStatusHistory[]
 
   @@index([userId, status])
   @@index([status])
   @@index([deliveryUserId])
   @@index([storeId])
+}
+
+model OrderStatusHistory {
+  id              String      @id @default(uuid())
+  orderId         String
+  fromStatus      OrderStatus
+  toStatus        OrderStatus
+  changedByUserId String
+  createdAt       DateTime    @default(now())
+
+  order     Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  changedBy User  @relation(fields: [changedByUserId], references: [id], onDelete: Restrict)
+
+  @@index([orderId, createdAt])
+  @@index([changedByUserId])
 }
 
 model Payment {
@@ -297,4 +331,15 @@ model Banner {
   updatedAt   DateTime @updatedAt
 
   @@index([active])
+}
+
+model BlogArticle {
+  id        String   @id @default(uuid())
+  title     String   @db.VarChar(200)
+  content   String   @db.Text
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active, createdAt])
 }

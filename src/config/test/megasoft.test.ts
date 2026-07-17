@@ -1,23 +1,34 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('../../services/bcvExchangeRate.js', () => ({
+  getUsdVesRate: vi.fn().mockResolvedValue(600),
+}));
+
 describe('megasoft config', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
     vi.resetModules();
   });
 
-  it('resolveMegasoftAmount converts order total using USD price', async () => {
+  it('resolveMegasoftAmount converts order total using live USD rate', async () => {
     vi.stubEnv('USD_PRICE', '600');
     vi.stubEnv('MEGASOFT_AMOUNT_OVERRIDE', '');
+    const { getUsdVesRate } = await import('../../services/bcvExchangeRate.js');
+    vi.mocked(getUsdVesRate).mockResolvedValue(600);
     const { resolveMegasoftAmount } = await import('../megasoft.js');
-    expect(resolveMegasoftAmount(1.23)).toBe(738);
+    await expect(resolveMegasoftAmount(1.23)).resolves.toBe(738);
   });
 
   it('resolveMegasoftAmount uses override when set', async () => {
     vi.stubEnv('MEGASOFT_AMOUNT_OVERRIDE', '50');
     vi.stubEnv('USD_PRICE', '600');
     const { resolveMegasoftAmount } = await import('../megasoft.js');
-    expect(resolveMegasoftAmount(100)).toBe(50);
+    await expect(resolveMegasoftAmount(100)).resolves.toBe(50);
+  });
+
+  it('convertUsdToBs multiplies by provided rate', async () => {
+    const { convertUsdToBs } = await import('../megasoft.js');
+    expect(convertUsdToBs(2, 725.762)).toBe(1451.52);
   });
 
   it('isMegasoftConfigured returns false when required fields are missing', async () => {

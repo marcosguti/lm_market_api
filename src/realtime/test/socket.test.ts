@@ -27,6 +27,7 @@ vi.mock('../../queries/user.js', () => ({
 import {
   createSocketServer,
   emitKitchenNewPaid,
+  emitKitchenOrderUpdated,
   emitOrderUpdated,
   emitUserNotification,
   KITCHEN_ROOM,
@@ -58,6 +59,12 @@ describe('socket emits', () => {
     emitKitchenNewPaid({ id: 'o1' });
     expect(to).toHaveBeenCalledWith(KITCHEN_ROOM);
     expect(emit).toHaveBeenCalledWith('order:newPaid', { id: 'o1' });
+  });
+
+  it('emitKitchenOrderUpdated sends order:updated to kitchen room', () => {
+    emitKitchenOrderUpdated({ id: 'o1', status: 'delivering' });
+    expect(to).toHaveBeenCalledWith(KITCHEN_ROOM);
+    expect(emit).toHaveBeenCalledWith('order:updated', { id: 'o1', status: 'delivering' });
   });
 });
 

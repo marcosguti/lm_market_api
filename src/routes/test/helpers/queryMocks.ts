@@ -42,6 +42,16 @@ const dealServiceMocks = vi.hoisted(() => ({
   updateDeal: vi.fn(),
 }));
 
+const blogArticleServiceMocks = vi.hoisted(() => ({
+  createBlogArticle: vi.fn(),
+  deleteBlogArticle: vi.fn(),
+  getActiveBlogArticleById: vi.fn(),
+  getActiveBlogArticlesPaginated: vi.fn(),
+  getAllBlogArticles: vi.fn(),
+  getBlogArticleById: vi.fn(),
+  updateBlogArticle: vi.fn(),
+}));
+
 const catalogQueryMocks = vi.hoisted(() => ({
   findAllBrandsForCatalog: vi.fn(),
   findAllDepartmentsForCatalog: vi.fn(),
@@ -91,6 +101,20 @@ vi.mock('../../../services/bannerService.js', async (importOriginal) => {
     getAllBanners: bannerServiceMocks.getAllBanners,
     getBannerById: bannerServiceMocks.getBannerById,
     updateBanner: bannerServiceMocks.updateBanner,
+  };
+});
+
+vi.mock('../../../services/blogArticleService.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../services/blogArticleService.js')>();
+  return {
+    ...actual,
+    createBlogArticle: blogArticleServiceMocks.createBlogArticle,
+    deleteBlogArticle: blogArticleServiceMocks.deleteBlogArticle,
+    getActiveBlogArticleById: blogArticleServiceMocks.getActiveBlogArticleById,
+    getActiveBlogArticlesPaginated: blogArticleServiceMocks.getActiveBlogArticlesPaginated,
+    getAllBlogArticles: blogArticleServiceMocks.getAllBlogArticles,
+    getBlogArticleById: blogArticleServiceMocks.getBlogArticleById,
+    updateBlogArticle: blogArticleServiceMocks.updateBlogArticle,
   };
 });
 
@@ -229,6 +253,47 @@ export function resetQueryMocks(): void {
   dealServiceMocks.createDeal.mockResolvedValue({ id: 'd1' });
   dealServiceMocks.updateDeal.mockResolvedValue({ id: 'd1' });
   dealServiceMocks.deleteDeal.mockResolvedValue(undefined);
+  blogArticleServiceMocks.getBlogArticleById.mockResolvedValue({
+    id: 'blog-1',
+    title: 'Post',
+    content: '<p>Hola</p>',
+    active: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  blogArticleServiceMocks.getActiveBlogArticleById.mockResolvedValue({
+    id: 'blog-1',
+    title: 'Post',
+    content: '<p>Hola</p>',
+    active: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  blogArticleServiceMocks.getAllBlogArticles.mockResolvedValue([]);
+  blogArticleServiceMocks.getActiveBlogArticlesPaginated.mockResolvedValue({
+    data: [],
+    page: 1,
+    pageSize: 20,
+    total: 0,
+    totalPages: 1,
+  });
+  blogArticleServiceMocks.createBlogArticle.mockResolvedValue({
+    id: 'blog-1',
+    title: 'Post',
+    content: '<p>Hola</p>',
+    active: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  blogArticleServiceMocks.updateBlogArticle.mockResolvedValue({
+    id: 'blog-1',
+    title: 'Post',
+    content: '<p>Hola</p>',
+    active: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  blogArticleServiceMocks.deleteBlogArticle.mockResolvedValue(undefined);
   productQueryMocks.findAdminProductsPaginated.mockResolvedValue({
     data: [],
     page: 1,
@@ -267,4 +332,8 @@ export function getDealServiceMocks() {
   return dealServiceMocks;
 }
 
-export { bannerServiceMocks, catalogQueryMocks, dealServiceMocks };
+export function getBlogArticleServiceMocks() {
+  return blogArticleServiceMocks;
+}
+
+export { bannerServiceMocks, blogArticleServiceMocks, catalogQueryMocks, dealServiceMocks };

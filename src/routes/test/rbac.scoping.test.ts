@@ -59,18 +59,36 @@ describe('RBAC scoping rules', () => {
   describe('PATCH /api/delivery/orders/:id/delivered ownership', () => {
     it('calls markOrderDelivered with deliveryDriver actor', async () => {
       mockAuthenticatedUser('driver-1', 'deliveryDriver');
-      await request(app).patch(`/api/delivery/orders/${ORDER_ID}/delivered`).set(authHeader());
+      await request(app)
+        .patch(`/api/delivery/orders/${ORDER_ID}/delivered`)
+        .set(authHeader())
+        .attach('deliveryProof', Buffer.from('fake-image'), {
+          contentType: 'image/jpeg',
+          filename: 'proof.jpg',
+        });
       expect(getOrderMocks().markOrderDelivered).toHaveBeenCalledWith(
         'deliveryDriver',
         ORDER_ID,
         'driver-1',
+        'https://cdn/delivery/proof.jpg',
       );
     });
 
     it('calls markOrderDelivered with admin actor', async () => {
       mockAuthenticatedUser('admin-1', 'admin');
-      await request(app).patch(`/api/delivery/orders/${ORDER_ID}/delivered`).set(authHeader());
-      expect(getOrderMocks().markOrderDelivered).toHaveBeenCalledWith('admin', ORDER_ID, 'admin-1');
+      await request(app)
+        .patch(`/api/delivery/orders/${ORDER_ID}/delivered`)
+        .set(authHeader())
+        .attach('deliveryProof', Buffer.from('fake-image'), {
+          contentType: 'image/jpeg',
+          filename: 'proof.jpg',
+        });
+      expect(getOrderMocks().markOrderDelivered).toHaveBeenCalledWith(
+        'admin',
+        ORDER_ID,
+        'admin-1',
+        'https://cdn/delivery/proof.jpg',
+      );
     });
   });
 });

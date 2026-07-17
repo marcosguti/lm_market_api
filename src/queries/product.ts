@@ -25,7 +25,7 @@ export interface FindProductsPaginatedParams {
   pageSize: number;
   search?: string;
   sort?: null | ProductListSort;
-  storeId?: string;
+  storeId: string;
 }
 
 export interface FindProductsPaginatedResult {
@@ -123,8 +123,6 @@ export async function findProductsPaginated(
   const searchTrim = search?.trim();
   const orderBy: Prisma.ProductOrderByWithRelationInput = { name: 'asc' };
 
-  const storeFilter = storeId ? { storeId } : {};
-
   const minPriceDecimal =
     minPrice !== undefined && minPrice > 0
       ? new Prisma.Decimal(String(minPrice))
@@ -135,12 +133,12 @@ export async function findProductsPaginated(
     imageUrl: { not: null },
     productStores: {
       some: {
-        ...storeFilter,
         price:
           maxPrice !== undefined && maxPrice <= 50
             ? { gte: minPriceDecimal, lt: new Prisma.Decimal(String(maxPrice)) }
             : { gte: minPriceDecimal },
         stockQuantity: { gt: MIN_PUBLIC_STOCK },
+        storeId,
       },
     },
     ...buildBrandFilter(brand),
@@ -148,9 +146,18 @@ export async function findProductsPaginated(
     ...buildSearchWhere(searchTrim),
   };
 
+  const publicInclude = {
+    brandRef: true,
+    departmentRef: true,
+    productStores: {
+      include: { store: true },
+      where: { storeId },
+    },
+  } as const;
+
   const [data, total] = await Promise.all([
     prisma.product.findMany({
-      include: productInclude,
+      include: publicInclude,
       orderBy,
       skip,
       take: pageSize,

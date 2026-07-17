@@ -3,6 +3,7 @@ import cors from 'cors';
 import express from 'express';
 import { createServer } from 'http';
 
+import { runBcvRateSync, startBcvRateSyncSchedule } from './jobs/syncBcvRateJob.js';
 import {
   runExternalProductsSync,
   startExternalProductsSyncSchedule,
@@ -35,4 +36,8 @@ httpServer.listen(PORT, '0.0.0.0', () => {
     console.error('[product-sync] startup sync failed', err);
   });
   startExternalProductsSyncSchedule();
+  void runBcvRateSync().catch((err) => {
+    console.error('[bcv-rate] startup sync failed', err);
+  });
+  startBcvRateSyncSchedule();
 });

@@ -39,15 +39,16 @@ function sampleProduct(): ProductWithRelations {
 }
 
 describe('serializePublicProduct', () => {
-  it('maps product with store price and catalog names', () => {
+  it('maps product with store price and stockQuantity', () => {
     const result = serializePublicProduct(sampleProduct());
 
     expect(result.id).toBe('p1');
     expect(result.brand).toBe('Brand A');
     expect(result.department).toBe('Dept A');
     expect(result.price).toBe(12.5);
-    expect(result.totalStock).toBe(20);
-    expect(result.productStores[0].price).toBe(12.5);
+    expect(result.stockQuantity).toBe(20);
+    expect(result).not.toHaveProperty('productStores');
+    expect(result).not.toHaveProperty('totalStock');
   });
 
   it('returns zero price when product has no stores', () => {
@@ -55,6 +56,7 @@ describe('serializePublicProduct', () => {
     const result = serializePublicProduct(product);
 
     expect(result.price).toBe(0);
-    expect(result.totalStock).toBeNull();
+    expect(result.stockQuantity).toBeNull();
+    expect(result).not.toHaveProperty('productStores');
   });
 });

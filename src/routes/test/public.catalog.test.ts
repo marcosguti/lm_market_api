@@ -17,8 +17,16 @@ describe('Public catalog routes', () => {
     resetQueryMocks();
   });
 
-  it('GET /api/products returns paginated empty list', async () => {
+  it('GET /api/products requires storeId', async () => {
     const res = await request(app).get('/api/products');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBeDefined();
+  });
+
+  it('GET /api/products returns paginated empty list', async () => {
+    const res = await request(app)
+      .get('/api/products')
+      .query({ storeId: '4b8975e4-8daf-41f1-8632-230816673665' });
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual([]);
     expect(res.body.total).toBe(0);

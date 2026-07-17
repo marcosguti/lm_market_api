@@ -12,7 +12,7 @@ vi.mock('../../../config/megasoft.js', () => ({
     merchantCid: '',
     merchantPhone: '04141234567',
   },
-  resolveMegasoftAmount: (amount: number) => amount,
+  resolveMegasoftAmount: async (amount: number) => amount,
 }));
 
 import './helpers/sharedMocks.js';
@@ -95,28 +95,46 @@ describe('Orders business integration', () => {
   });
 
   describe('POST /api/orders/:id/confirm-payment', () => {
-    it('returns 400 for cash without required validation issues', async () => {
+    it('returns 400 when deliveryAddress is missing', async () => {
       const res = await request(app)
         .post('/api/orders/o1/confirm-payment')
         .set(authHeader())
         .send({ method: 'cash' });
-      expect(res.status).toBe(200);
-      expect(orderMocks.confirmPendingOrderPaymentWithDetails).toHaveBeenCalled();
+      expect(res.status).toBe(400);
+      expect(orderMocks.confirmPendingOrderPaymentWithDetails).not.toHaveBeenCalled();
     });
 
-    it('returns 400 when non-cash payment lacks screenshot', async () => {
+    it('returns 400 when cash payment lacks screenshot', async () => {
       const res = await request(app)
         .post('/api/orders/o1/confirm-payment')
         .set(authHeader())
-        .send({ method: 'zelle', reference: 'REF1', paidAt: new Date().toISOString() });
+        .send({ deliveryAddress: 'Calle 123', method: 'cash' });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/comprobante/i);
+      expect(orderMocks.confirmPendingOrderPaymentWithDetails).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 when non-cash payment lacks screenshot', async () => {
+      const res = await request(app).post('/api/orders/o1/confirm-payment').set(authHeader()).send({
+        deliveryAddress: 'Calle 123',
+        method: 'zelle',
+        reference: 'REF1',
+        paidAt: new Date().toISOString(),
+      });
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/comprobante/i);
     });
 
-    it('returns 200 for zelle with screenshot upload mocked via service', async () => {
+    it('returns 200 for cash with screenshot', async () => {
       orderMocks.confirmPendingOrderPaymentWithDetails.mockResolvedValue({
         changes: [],
-        order: { id: 'o1', status: 'paymentConfirmed', products: [], totalAmount: 10 },
+        order: {
+          id: 'o1',
+          status: 'paymentPendingConfirmation',
+          products: [],
+          totalAmount: 10,
+          userId: 'u1',
+        },
       });
       const res = await request(app)
         .post('/api/orders/o1/confirm-payment')
@@ -125,6 +143,31 @@ describe('Orders business integration', () => {
           contentType: 'image/jpeg',
           filename: 'proof.jpg',
         })
+        .field('deliveryAddress', 'Calle 123')
+        .field('method', 'cash');
+      expect(res.status).toBe(200);
+      expect(orderMocks.confirmPendingOrderPaymentWithDetails).toHaveBeenCalled();
+    });
+
+    it('returns 200 for zelle with screenshot upload mocked via service', async () => {
+      orderMocks.confirmPendingOrderPaymentWithDetails.mockResolvedValue({
+        changes: [],
+        order: {
+          id: 'o1',
+          status: 'paymentPendingConfirmation',
+          products: [],
+          totalAmount: 10,
+          userId: 'u1',
+        },
+      });
+      const res = await request(app)
+        .post('/api/orders/o1/confirm-payment')
+        .set(authHeader())
+        .attach('screenshot', Buffer.from('fake-image'), {
+          contentType: 'image/jpeg',
+          filename: 'proof.jpg',
+        })
+        .field('deliveryAddress', 'Calle 123')
         .field('method', 'zelle')
         .field('reference', 'REF1')
         .field('paidAt', new Date().toISOString());
@@ -139,7 +182,12 @@ describe('Orders business integration', () => {
       const res = await request(app)
         .post('/api/orders/o1/confirm-payment')
         .set(authHeader())
-        .send({ method: 'cash' });
+        .attach('screenshot', Buffer.from('fake-image'), {
+          contentType: 'image/jpeg',
+          filename: 'proof.jpg',
+        })
+        .field('deliveryAddress', 'Calle 123')
+        .field('method', 'cash');
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('ORDER_NOT_PENDING');
     });
@@ -166,6 +214,7 @@ describe('Orders business integration', () => {
         .send({
           amount: 100,
           bankCode: '0105',
+          deliveryAddress: 'Calle 123',
           nationalId: 'V12345678',
           phone: '04141234567',
           reference: 'REF123',
@@ -184,6 +233,7 @@ describe('Orders business integration', () => {
         .send({
           amount: 100,
           bankCode: '0105',
+          deliveryAddress: 'Calle 123',
           nationalId: 'V12345678',
           phone: '04141234567',
           reference: 'REF123',

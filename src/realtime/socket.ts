@@ -74,6 +74,10 @@ export function emitKitchenNewPaid(payload: unknown): void {
   requireIO().to(KITCHEN_ROOM).emit('order:newPaid', payload);
 }
 
+export function emitKitchenOrderUpdated(payload: unknown): void {
+  requireIO().to(KITCHEN_ROOM).emit('order:updated', payload);
+}
+
 export function emitOrderCancelled(payload: { orderId: string }): void {
   requireIO().to(KITCHEN_ROOM).emit('order:cancelled', payload);
 }

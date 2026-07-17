@@ -6,6 +6,7 @@ describe('verifyMobilePaymentSchema', () => {
   const valid = {
     amount: 10.5,
     bankCode: '0105',
+    deliveryAddress: 'Calle 123',
     nationalId: 'V12345678',
     phone: '04141234567',
     reference: 'REF123',
@@ -25,11 +26,18 @@ describe('verifyMobilePaymentSchema', () => {
     const { error, value } = verifyMobilePaymentSchema.validate({
       amount: valid.amount,
       bankCode: valid.bankCode,
+      deliveryAddress: valid.deliveryAddress,
       nationalId: valid.nationalId,
       phone: valid.phone,
     });
     expect(error).toBeDefined();
     expect(value.reference).toBeUndefined();
+  });
+
+  it('rejects missing deliveryAddress', () => {
+    const { deliveryAddress: _omit, ...withoutAddress } = valid;
+    const { error } = verifyMobilePaymentSchema.validate(withoutAddress);
+    expect(error).toBeDefined();
   });
 
   it('rejects non-positive amount', () => {

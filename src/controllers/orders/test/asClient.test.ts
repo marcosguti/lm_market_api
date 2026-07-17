@@ -37,6 +37,16 @@ describe('asClient', () => {
     });
   });
 
+  it('returns 403 for deliveryDriver users', () => {
+    const req = { userId: 'u1', userType: 'deliveryDriver' } as AuthRequest;
+    const res = mockRes();
+    expect(asClient(req, res)).toBeNull();
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toEqual({
+      error: 'Solo los usuarios cliente pueden usar los endpoints de carrito/pedidos',
+    });
+  });
+
   it('returns 403 when userId is missing', () => {
     const req = { userType: 'client' } as AuthRequest;
     const res = mockRes();

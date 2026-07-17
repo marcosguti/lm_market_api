@@ -1,10 +1,12 @@
 import type { OrderStatus } from '@prisma/client';
 
 const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
+  assignedToDeliveryDriver: 'Asignada a repartidor',
   cancelled: 'Cancelada',
   delivered: 'Entregada',
-  outForDelivery: 'En Reparto',
+  delivering: 'En Reparto',
   paymentConfirmed: 'Pago Confirmado',
+  paymentPendingConfirmation: 'Pago por confirmar',
   pending: 'Pendiente',
   preparing: 'Preparando',
   readyForDelivery: 'Lista para Reparto',

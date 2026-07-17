@@ -2,6 +2,7 @@ import type { Response } from 'express';
 
 import { megasoftConfig } from '../../config/megasoft.js';
 import { getBanksForMegasoft } from '../../data/venezuelanBanks.js';
+import { getUsdVesRateInfo } from '../../services/bcvExchangeRate.js';
 
 export async function getPaymentBanks(_req: unknown, res: Response): Promise<void> {
   const banks = getBanksForMegasoft(megasoftConfig.supportedBankCodes);
@@ -12,6 +13,7 @@ export async function getPaymentConfig(_req: unknown, res: Response): Promise<vo
   const merchantBank = getBanksForMegasoft(megasoftConfig.supportedBankCodes).find(
     (b) => b.code === megasoftConfig.merchantBankCode,
   );
+  const rateInfo = await getUsdVesRateInfo();
 
   res.json({
     megasoftEnabled: megasoftConfig.enabled,
@@ -21,5 +23,8 @@ export async function getPaymentConfig(_req: unknown, res: Response): Promise<vo
       phone: megasoftConfig.merchantPhone,
       rif: megasoftConfig.merchantRif,
     },
+    usdRate: rateInfo.rate,
+    usdRateSource: rateInfo.source,
+    usdRateUpdatedAt: rateInfo.fetchedAt?.toISOString() ?? null,
   });
 }

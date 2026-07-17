@@ -1,17 +1,19 @@
 import type { UserType } from '@prisma/client';
-import { beforeEach, describe, it, vi } from 'vitest';
+import request from 'supertest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('../../../config/megasoft.js', () => ({
   megasoftCertP2cPayload: {},
   megasoftConfig: { baseUrl: 'http://test', certHardcoded: true, enabled: true },
-  resolveMegasoftAmount: vi.fn().mockReturnValue(10),
+  resolveMegasoftAmount: vi.fn().mockResolvedValue(10),
 }));
 
 import './helpers/sharedMocks.js';
 import './helpers/queryMocks.js';
 import { resetQueryMocks } from './helpers/queryMocks.js';
 import './helpers/orderServiceMocks.js';
-import { resetOrderServiceMocks } from './helpers/orderServiceMocks.js';
+import { getOrderMocks, resetOrderServiceMocks } from './helpers/orderServiceMocks.js';
+import { authHeader, mockAuthenticatedUser } from './helpers/authHelpers.js';
 import { createTestApp } from './helpers/createTestApp.js';
 import {
   expectAllowed,
@@ -19,6 +21,8 @@ import {
   expectUnauthorized,
   NON_CLIENT_ROLES,
 } from './helpers/rbacMatrix.js';
+
+const orderMocks = getOrderMocks();
 
 const app = createTestApp();
 const ORDER_ID = '11111111-1111-1111-1111-111111111111';
@@ -90,7 +94,7 @@ describe('RBAC orders routes (client only via asClient)', () => {
   });
 
   describe('POST /api/orders/:id/confirm-payment', () => {
-    const body = { method: 'cash' };
+    const body = { deliveryAddress: 'Calle 123', method: 'cash' };
 
     it('returns 401 without token', async () => {
       await expectUnauthorized(app, 'post', '/api/orders/:id/confirm-payment', {
@@ -107,11 +111,27 @@ describe('RBAC orders routes (client only via asClient)', () => {
     });
 
     it('allows client', async () => {
-      await expectAllowed(app, 'post', '/api/orders/:id/confirm-payment', 'client', {
-        body,
-        expectedStatus: 200,
-        pathParams: { id: ORDER_ID },
+      orderMocks.confirmPendingOrderPaymentWithDetails.mockResolvedValue({
+        changes: [],
+        order: {
+          id: ORDER_ID,
+          status: 'paymentPendingConfirmation',
+          products: [],
+          totalAmount: 10,
+          userId: 'u1',
+        },
       });
+      mockAuthenticatedUser('u1', 'client');
+      const res = await request(app)
+        .post(`/api/orders/${ORDER_ID}/confirm-payment`)
+        .set(authHeader())
+        .attach('screenshot', Buffer.from('fake-image'), {
+          contentType: 'image/jpeg',
+          filename: 'proof.jpg',
+        })
+        .field('deliveryAddress', 'Calle 123')
+        .field('method', 'cash');
+      expect(res.status).toBe(200);
     });
   });
 
@@ -119,6 +139,8 @@ describe('RBAC orders routes (client only via asClient)', () => {
     const body = {
       amount: 10,
       bankCode: '0102',
+      deliveryAddress: 'Calle 123',
+      nationalId: 'V12345678',
       phone: '04141234567',
       reference: '123456',
     };

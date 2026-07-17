@@ -38,13 +38,13 @@ export async function verifyMobilePayment(req: AuthRequest, res: Response): Prom
     return;
   }
 
-  const { amount, bankCode, nationalId, phone, reference } = validation.value;
+  const { amount, bankCode, deliveryAddress, nationalId, phone, reference } = validation.value;
 
   const orderPreview = await prisma.order.findUnique({
     select: { id: true, totalAmount: true },
     where: { id: orderId },
   });
-  const megasoftRequestLog = buildMegasoftP2cRequestLog({
+  const megasoftRequestLog = await buildMegasoftP2cRequestLog({
     amount,
     bankCode,
     invoice: orderPreview ? orderPreview.id.replace(/-/g, '').slice(0, 20) : undefined,
@@ -59,6 +59,7 @@ export async function verifyMobilePayment(req: AuthRequest, res: Response): Prom
       amount,
       clientBankCode: bankCode,
       clientPhone: phone,
+      deliveryAddress: deliveryAddress ?? null,
       nationalId,
       reference,
     });
@@ -101,7 +102,7 @@ export async function verifyMobilePayment(req: AuthRequest, res: Response): Prom
   }
 }
 
-function buildMegasoftP2cRequestLog(input: {
+async function buildMegasoftP2cRequestLog(input: {
   amount: number;
   bankCode: string;
   invoice?: string;
@@ -112,6 +113,10 @@ function buildMegasoftP2cRequestLog(input: {
 }) {
   const baseUrl = megasoftConfig.baseUrl;
   if (megasoftConfig.certHardcoded) {
+    const resolvedAmount =
+      input.orderTotalAmount !== undefined
+        ? (await resolveMegasoftAmount(input.orderTotalAmount)).toFixed(2)
+        : undefined;
     return {
       endpoints: {
         preRegister: `${baseUrl}/action/v2-preregistro`,
@@ -121,9 +126,7 @@ function buildMegasoftP2cRequestLog(input: {
       hardcoded: true,
       payload: {
         affiliationCode: megasoftConfig.affiliationCode,
-        amount: input.orderTotalAmount
-          ? resolveMegasoftAmount(input.orderTotalAmount).toFixed(2)
-          : undefined,
+        amount: resolvedAmount,
         clientBankCode: megasoftCertP2cPayload.clientBankCode,
         clientPhone: megasoftCertP2cPayload.clientPhone,
         invoice: input.invoice,

@@ -1,22 +1,21 @@
 import Joi from 'joi';
 
-export { paginationQuerySchema } from '../commonSchema.js';
+import { startOfBusinessDayCaracas } from '../../utils/businessDay.js';
+import { paginationQuerySchema } from '../commonSchema.js';
+
+export { paginationQuerySchema };
 
 const ORDER_STATUS_VALUES = [
   'pending',
+  'paymentPendingConfirmation',
   'paymentConfirmed',
   'preparing',
   'readyForDelivery',
-  'outForDelivery',
+  'assignedToDeliveryDriver',
+  'delivering',
   'delivered',
   'cancelled',
 ] as const;
-
-function startOfDay(date: Date): Date {
-  const value = new Date(date);
-  value.setHours(0, 0, 0, 0);
-  return value;
-}
 
 export const kitchenListQuerySchema = Joi.object({
   createdFrom: Joi.date().optional(),
@@ -31,8 +30,9 @@ export const kitchenListQuerySchema = Joi.object({
   storeId: Joi.string().allow('').optional(),
 }).custom((value, helpers) => {
   if (value.createdFrom && value.createdTo) {
-    const from = startOfDay(new Date(value.createdFrom));
-    const to = startOfDay(new Date(value.createdTo));
+    // Compare Caracas calendar starts only; do not mutate query dates here.
+    const from = startOfBusinessDayCaracas(value.createdFrom as Date);
+    const to = startOfBusinessDayCaracas(value.createdTo as Date);
     if (to.getTime() < from.getTime()) {
       return helpers.message({
         custom: 'La fecha de fin debe ser igual o posterior a la de inicio',
@@ -43,5 +43,14 @@ export const kitchenListQuerySchema = Joi.object({
 });
 
 export const patchStatusSchema = Joi.object({
-  status: Joi.string().valid('preparing', 'readyForDelivery', 'delivered', 'cancelled').required(),
+  cancellationReason: Joi.when('status', {
+    is: 'cancelled',
+    otherwise: Joi.forbidden(),
+    then: Joi.string().trim().min(3).max(500).required(),
+  }),
+  status: Joi.string().valid('preparing', 'readyForDelivery', 'cancelled').required(),
+});
+
+export const assignDeliverySchema = Joi.object({
+  deliveryUserId: Joi.string().uuid().required(),
 });

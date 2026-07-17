@@ -3,6 +3,7 @@ import Mailjet from 'node-mailjet';
 import { getLogoInlineAttachment } from './logo.js';
 import { getEmailVerificationTemplate } from './templates/emailVerification.js';
 import { getLoginCodeTemplate } from './templates/loginCode.js';
+import { getOrderCancelledTemplate } from './templates/orderCancelled.js';
 import { getPasswordResetTemplate } from './templates/passwordReset.js';
 
 type MailjetApi = {
@@ -249,6 +250,60 @@ export const sendPasswordResetEmail = async ({
   console.info('[mailjet] sending password reset', {
     from: fromEmail,
     resetUrl: maskResetUrl(resetUrl),
+    to: email,
+  });
+
+  try {
+    const response = await mailjet.post('send', { version: 'v3.1' }).request(payload);
+    const message = response.body?.Messages?.[0];
+    const status = message?.Status;
+
+    // eslint-disable-next-line no-console
+    console.info('[mailjet] send response', {
+      errors: message?.Errors,
+      messageId: message?.MessageID,
+      status,
+    });
+
+    if (status !== 'success') {
+      throw new Error(
+        `Mailjet status: ${status ?? 'unknown'} - ${JSON.stringify(message?.Errors ?? response.body)}`,
+      );
+    }
+  } catch (err) {
+    logMailjetSendFailure(err);
+    throw err;
+  }
+};
+
+export const sendOrderCancelledEmail = async ({
+  email,
+  firstName,
+  reason,
+  shortOrderId,
+}: {
+  email: string;
+  firstName: string;
+  reason: string;
+  shortOrderId: string;
+}): Promise<void> => {
+  const { fromEmail } = assertMailjetConfig();
+  const mailjet = getMailjetClient();
+
+  const payload = {
+    Messages: [
+      buildMailjetMessage({
+        htmlPart: getOrderCancelledTemplate({ firstName, reason, shortOrderId }),
+        subject: 'Tu orden fue cancelada — LM Market',
+        toEmail: email,
+      }),
+    ],
+  };
+
+  // eslint-disable-next-line no-console
+  console.info('[mailjet] sending order cancelled', {
+    from: fromEmail,
+    shortOrderId,
     to: email,
   });
 

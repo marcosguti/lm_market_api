@@ -48,7 +48,12 @@ describe('product queries', () => {
   });
 
   it('findProductsPaginated applies search filter', async () => {
-    await findProductsPaginated({ page: 1, pageSize: 10, search: 'leche' });
+    await findProductsPaginated({
+      page: 1,
+      pageSize: 10,
+      search: 'leche',
+      storeId: '4b8975e4-8daf-41f1-8632-230816673665',
+    });
     expect(prismaMocks.findMany).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({

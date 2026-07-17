@@ -15,6 +15,7 @@ export const patchLinesSchema = Joi.object({
 });
 
 export const confirmPaymentSchema = Joi.object({
+  deliveryAddress: Joi.string().trim().min(1).max(500).required(),
   method: Joi.string().valid('cash', 'zelle', 'mobilePayment', 'binance').required(),
   paidAt: Joi.date().iso().allow(null).optional(),
   reference: Joi.string().trim().min(3).max(100).allow(null, '').optional(),

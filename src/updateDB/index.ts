@@ -161,6 +161,48 @@ const migrations: MigrationFunction[] = [
     },
     version: 4,
   },
+  {
+    name: 'Hygiene delivery orders after status rename',
+    up: async (tx: TransactionClient) => {
+      const reverted = await tx.order.updateMany({
+        data: { status: 'readyForDelivery' },
+        where: { deliveryUserId: null, status: 'delivering' },
+      });
+      console.log(
+        `Reverted ${reverted.count} delivering order(s) without driver to readyForDelivery`,
+      );
+
+      const cleared = await tx.order.updateMany({
+        data: { deliveryUserId: null },
+        where: {
+          deliveryUserId: { not: null },
+          status: {
+            in: [
+              'pending',
+              'paymentPendingConfirmation',
+              'paymentConfirmed',
+              'preparing',
+              'readyForDelivery',
+              'cancelled',
+            ],
+          },
+        },
+      });
+      console.log(`Cleared deliveryUserId on ${cleared.count} non-delivery order(s)`);
+    },
+    version: 5,
+  },
+  {
+    name: 'Add Order.cancellationReason',
+    up: async (tx: TransactionClient) => {
+      await tx.$executeRaw`
+        ALTER TABLE "Order"
+        ADD COLUMN IF NOT EXISTS "cancellationReason" TEXT
+      `;
+      console.log('Order.cancellationReason column ensured');
+    },
+    version: 6,
+  },
 ];
 
 const runMigrations = async () => {

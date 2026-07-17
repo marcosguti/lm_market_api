@@ -12,7 +12,9 @@ import { Prisma, PrismaClient } from '@prisma/client';
 import { megasoftConfig, resolveMegasoftAmount } from '../config/megasoft.js';
 import prisma from '../prisma.js';
 import { emitKitchenNewPaid, emitOrderUpdated, emitUserNotification } from '../realtime/socket.js';
+import { startOfBusinessDayCaracas, startOfNextBusinessDayCaracas } from '../utils/businessDay.js';
 import { formatOrderStatusChangeBody } from '../utils/orderStatusLabels.js';
+import { getUsdVesRate } from './bcvExchangeRate.js';
 import { MegasoftPaymentRejectedError } from './megasoft/types.js';
 
 export interface CartLineInput {
@@ -37,13 +39,17 @@ export interface OrderLine {
   unitPrice: number;
 }
 
-export interface OrderWithLines extends Omit<Order, 'products' | 'totalAmount'> {
+export interface OrderWithLines extends Omit<Order, 'exchangeRate' | 'products' | 'totalAmount'> {
+  exchangeRate: null | number;
   products: OrderLine[];
   storeName?: null | string;
   totalAmount: number;
+  totalAmountBs: null | number;
 }
 
 export interface OrderWithUser extends OrderWithLines {
+  deliveryUserName: null | string;
+  deliveryUserPhone: null | string;
   payment: null | SerializedPayment;
   userNumberId: string;
 }
@@ -74,6 +80,7 @@ export class OrderDomainError extends Error {
 const client = prisma as PrismaClient;
 
 export interface ConfirmPaymentDetails {
+  deliveryAddress?: null | string;
   method: 'binance' | 'cash' | 'mobilePayment' | 'zelle';
   paidAt?: Date | null;
   reference?: null | string;
@@ -92,6 +99,7 @@ export interface MobilePaymentP2cDetails {
   amount: number;
   clientBankCode: string;
   clientPhone: string;
+  deliveryAddress?: null | string;
   nationalId: string;
   reference: string;
 }
@@ -99,6 +107,8 @@ export interface MobilePaymentP2cDetails {
 export async function adminSetOrderStatus(
   orderId: string,
   toStatus: OrderStatus,
+  changedByUserId: string,
+  cancellationReason?: string,
 ): Promise<OrderWithLines> {
   return client.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
@@ -118,8 +128,22 @@ export async function adminSetOrderStatus(
       );
     }
 
+    const trimmedReason = cancellationReason?.trim() ?? '';
+    if (toStatus === 'cancelled' && trimmedReason.length < 3) {
+      throw new OrderDomainError(
+        'CANCELLATION_REASON_REQUIRED',
+        'El motivo de cancelación es obligatorio',
+        400,
+      );
+    }
+
     const result = await tx.order.updateMany({
       data: {
+        ...(toStatus === 'cancelled' ? { cancellationReason: trimmedReason } : {}),
+        ...(toStatus === 'paymentConfirmed' &&
+        (order.exchangeRate === null || order.exchangeRate === undefined)
+          ? { exchangeRate: new Prisma.Decimal(await getUsdVesRate()) }
+          : {}),
         status: toStatus,
         version: { increment: 1 },
       },
@@ -131,6 +155,66 @@ export async function adminSetOrderStatus(
     if (result.count === 0) {
       throw new OrderDomainError('ORDER_CONFLICT', 'El pedido cambió de forma concurrente', 409);
     }
+
+    await appendOrderStatusHistory(tx, {
+      changedByUserId,
+      fromStatus: order.status,
+      orderId,
+      toStatus,
+    });
+
+    const updated = await tx.order.findUnique({ where: { id: orderId } });
+    if (!updated) throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
+    return serializeOrder(updated);
+  });
+}
+
+export async function assignOrderToDelivery(
+  orderId: string,
+  deliveryUserId: string,
+  changedByUserId: string,
+): Promise<OrderWithLines> {
+  return client.$transaction(async (tx) => {
+    const driver = await tx.user.findUnique({ where: { id: deliveryUserId } });
+    if (!driver || driver.type !== 'deliveryDriver') {
+      throw new OrderDomainError(
+        'INVALID_DELIVERY_DRIVER',
+        'El usuario indicado no es un repartidor válido',
+        400,
+      );
+    }
+
+    const order = await tx.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
+    if (order.status !== 'readyForDelivery') {
+      throw new OrderDomainError(
+        'INVALID_STATUS_TRANSITION',
+        'Solo se pueden asignar órdenes listas para reparto',
+        400,
+      );
+    }
+
+    const result = await tx.order.updateMany({
+      data: {
+        deliveryUserId,
+        status: 'assignedToDeliveryDriver',
+        version: { increment: 1 },
+      },
+      where: {
+        id: orderId,
+        status: 'readyForDelivery',
+      },
+    });
+    if (result.count === 0) {
+      throw new OrderDomainError('ORDER_CONFLICT', 'El pedido cambió de forma concurrente', 409);
+    }
+
+    await appendOrderStatusHistory(tx, {
+      changedByUserId,
+      fromStatus: 'readyForDelivery',
+      orderId,
+      toStatus: 'assignedToDeliveryDriver',
+    });
 
     const updated = await tx.order.findUnique({ where: { id: orderId } });
     if (!updated) throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
@@ -145,42 +229,17 @@ export function buildKitchenOrdersWhere(
   return {
     ...(id ? { id: { contains: id } } : {}),
     ...(storeId ? { storeId } : {}),
-    ...(status !== 'all' ? { status } : { status: { notIn: ['pending', 'cancelled'] } }),
+    // "Todos" includes cancelled; unpaid carts (pending) stay out of the admin list.
+    ...(status !== 'all' ? { status } : { status: { notIn: ['pending'] } }),
     ...(createdFrom || createdTo
       ? {
           createdAt: {
-            ...(createdFrom ? { gte: startOfDayDate(createdFrom) } : {}),
-            ...(createdTo ? { lte: endOfDayDate(createdTo) } : {}),
+            ...(createdFrom ? { gte: startOfBusinessDayCaracas(createdFrom) } : {}),
+            ...(createdTo ? { lt: startOfNextBusinessDayCaracas(createdTo) } : {}),
           },
         }
       : {}),
   };
-}
-
-export async function claimDeliveryOrder(
-  orderId: string,
-  deliveryUserId: string,
-): Promise<OrderWithLines> {
-  return client.$transaction(async (tx) => {
-    const result = await tx.order.updateMany({
-      data: {
-        deliveryUserId,
-        status: 'outForDelivery',
-        version: { increment: 1 },
-      },
-      where: {
-        deliveryUserId: null,
-        id: orderId,
-        status: 'readyForDelivery',
-      },
-    });
-    if (result.count === 0) {
-      throw new OrderDomainError('ORDER_NOT_AVAILABLE', 'El pedido no está disponible', 409);
-    }
-    const updated = await tx.order.findUnique({ where: { id: orderId } });
-    if (!updated) throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
-    return serializeOrder(updated);
-  });
 }
 
 export async function confirmPendingOrderPayment(
@@ -252,8 +311,12 @@ export async function confirmPendingOrderPayment(
       }
     }
 
+    const delivery = await resolveDeliverySnapshot(tx, userId);
     const updated = await tx.order.updateMany({
       data: {
+        deliveryAddress: delivery.deliveryAddress,
+        deliveryPhone: delivery.deliveryPhone,
+        exchangeRate: new Prisma.Decimal(await getUsdVesRate()),
         paidAt: new Date(),
         status: 'paymentConfirmed',
         version: { increment: 1 },
@@ -272,6 +335,13 @@ export async function confirmPendingOrderPayment(
       }
       throw new OrderDomainError('ORDER_NOT_PENDING', 'El pedido no está pendiente', 409);
     }
+
+    await appendOrderStatusHistory(tx, {
+      changedByUserId: userId,
+      fromStatus: 'pending',
+      orderId: order.id,
+      toStatus: 'paymentConfirmed',
+    });
 
     const paid = await tx.order.findUnique({ where: { id: order.id } });
     if (!paid) throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
@@ -346,14 +416,18 @@ export async function confirmPendingOrderPaymentWithDetails(
     }
 
     const paidAt = details.paidAt ?? new Date();
+    const delivery = await resolveDeliverySnapshot(tx, userId, details.deliveryAddress);
     const updatedCount = await tx.order.updateMany({
       data: {
+        deliveryAddress: delivery.deliveryAddress,
+        deliveryPhone: delivery.deliveryPhone,
+        exchangeRate: new Prisma.Decimal(await getUsdVesRate()),
         paidAt,
         paymentDate: details.paidAt ?? paidAt,
         paymentMethod: details.method,
         paymentReference: details.reference,
         paymentScreenshotUrl: details.screenshotUrl,
-        status: 'paymentConfirmed',
+        status: 'paymentPendingConfirmation',
         version: { increment: 1 },
       },
       where: { id: order.id, status: 'pending', userId },
@@ -362,34 +436,39 @@ export async function confirmPendingOrderPaymentWithDetails(
     if (updatedCount.count === 0) {
       const fresh = await tx.order.findUnique({ where: { id: order.id } });
       if (!fresh) throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
-      if (fresh.status === 'paymentConfirmed') {
+      if (fresh.status === 'paymentPendingConfirmation') {
         return { changes: [], order: serializeOrder(fresh) };
       }
       throw new OrderDomainError('ORDER_NOT_PENDING', 'El pedido no está pendiente', 409);
     }
 
-    if (details.method !== 'cash') {
-      await tx.payment.upsert({
-        create: {
-          method: details.method,
-          orderId: order.id,
-          paidAt,
-          reference: details.reference ?? '',
-          screenshotUrl: details.screenshotUrl,
-        },
-        update: {
-          method: details.method,
-          paidAt,
-          reference: details.reference ?? '',
-          screenshotUrl: details.screenshotUrl,
-        },
-        where: { orderId: order.id },
-      });
-    }
+    await appendOrderStatusHistory(tx, {
+      changedByUserId: userId,
+      fromStatus: 'pending',
+      orderId: order.id,
+      toStatus: 'paymentPendingConfirmation',
+    });
 
-    const paid = await tx.order.findUnique({ where: { id: order.id } });
-    if (!paid) throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
-    return { changes: reconciled.changes, order: serializeOrder(paid) };
+    await tx.payment.upsert({
+      create: {
+        method: details.method,
+        orderId: order.id,
+        paidAt,
+        reference: details.reference ?? '',
+        screenshotUrl: details.screenshotUrl,
+      },
+      update: {
+        method: details.method,
+        paidAt,
+        reference: details.reference ?? '',
+        screenshotUrl: details.screenshotUrl,
+      },
+      where: { orderId: order.id },
+    });
+
+    const submitted = await tx.order.findUnique({ where: { id: order.id } });
+    if (!submitted) throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
+    return { changes: reconciled.changes, order: serializeOrder(submitted) };
   });
 }
 
@@ -521,39 +600,6 @@ export async function getUserOrderHistory(
   };
 }
 
-export async function listDeliveryAvailable(
-  page: number,
-  pageSize: number,
-): Promise<{
-  data: OrderWithLines[];
-  page: number;
-  pageSize: number;
-  total: number;
-  totalPages: number;
-}> {
-  const skip = (page - 1) * pageSize;
-  const where: PrismaType.OrderWhereInput = {
-    deliveryUserId: null,
-    status: 'readyForDelivery',
-  };
-  const [data, total] = await Promise.all([
-    client.order.findMany({
-      orderBy: { createdAt: 'asc' },
-      skip,
-      take: pageSize,
-      where,
-    }),
-    client.order.count({ where }),
-  ]);
-  return {
-    data: data.map(serializeOrder),
-    page,
-    pageSize,
-    total,
-    totalPages: Math.ceil(total / pageSize) || 1,
-  };
-}
-
 export async function listDeliveryMine(
   deliveryUserId: string,
   page: number,
@@ -568,10 +614,13 @@ export async function listDeliveryMine(
   const skip = (page - 1) * pageSize;
   const where: PrismaType.OrderWhereInput = {
     deliveryUserId,
-    status: 'outForDelivery',
+    status: { in: ['assignedToDeliveryDriver', 'delivering'] },
   };
   const [data, total] = await Promise.all([
     client.order.findMany({
+      include: {
+        user: { select: { address: true, phone: true } },
+      },
       orderBy: { createdAt: 'asc' },
       skip,
       take: pageSize,
@@ -580,7 +629,7 @@ export async function listDeliveryMine(
     client.order.count({ where }),
   ]);
   return {
-    data: data.map(serializeOrder),
+    data: data.map(({ user, ...order }) => serializeOrderWithDeliveryContact(order, user)),
     page,
     pageSize,
     total,
@@ -605,9 +654,10 @@ export async function listKitchenOrders(
   const [data, total] = await Promise.all([
     client.order.findMany({
       include: {
+        deliveryUser: { select: { firstName: true, lastName: true, phone: true } },
         payment: true,
         store: { select: { name: true } },
-        user: { select: { numberId: true } },
+        user: { select: { address: true, numberId: true, phone: true } },
       },
       orderBy: { createdAt: 'desc' },
       skip,
@@ -616,11 +666,15 @@ export async function listKitchenOrders(
     }),
     client.order.count({ where }),
   ]);
-  const serialized = data.map((order) => ({
-    ...serializeOrder(order),
+  const serialized = data.map(({ user, ...order }) => ({
+    ...serializeOrderWithDeliveryContact(order, user),
+    deliveryUserName: order.deliveryUser
+      ? `${order.deliveryUser.firstName} ${order.deliveryUser.lastName}`.trim()
+      : null,
+    deliveryUserPhone: order.deliveryUser?.phone ?? null,
     payment: order.payment ? serializePayment(order.payment) : null,
     storeName: order.store?.name ?? null,
-    userNumberId: order.user.numberId,
+    userNumberId: user.numberId,
   }));
   return {
     data: await enrichOrdersWithProductImages(serialized),
@@ -693,6 +747,53 @@ export async function listNotificationsForUser(
   };
 }
 
+export async function listOrderStatusHistory(orderId: string): Promise<
+  Array<{
+    cancellationReason: null | string;
+    changedBy: {
+      email: string;
+      firstName: string;
+      id: string;
+      lastName: string;
+      type: UserType;
+    };
+    createdAt: Date;
+    deliveryProofUrl: null | string;
+    fromStatus: OrderStatus;
+    id: string;
+    toStatus: OrderStatus;
+  }>
+> {
+  const order = await client.order.findUnique({
+    select: {
+      cancellationReason: true,
+      deliveryProofUrl: true,
+    },
+    where: { id: orderId },
+  });
+  if (!order) throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
+
+  const rows = await client.orderStatusHistory.findMany({
+    include: {
+      changedBy: {
+        select: { email: true, firstName: true, id: true, lastName: true, type: true },
+      },
+    },
+    orderBy: { createdAt: 'asc' },
+    where: { orderId },
+  });
+
+  return rows.map((row) => ({
+    cancellationReason: row.toStatus === 'cancelled' ? (order.cancellationReason ?? null) : null,
+    changedBy: row.changedBy,
+    createdAt: row.createdAt,
+    deliveryProofUrl: row.toStatus === 'delivered' ? (order.deliveryProofUrl ?? null) : null,
+    fromStatus: row.fromStatus,
+    id: row.id,
+    toStatus: row.toStatus,
+  }));
+}
+
 export async function markAllNotificationsAsRead(userId: string): Promise<number> {
   const result = await client.notification.updateMany({
     data: { readAt: new Date() },
@@ -724,15 +825,21 @@ export async function markOrderDelivered(
   actorType: UserType,
   orderId: string,
   userId: string,
+  deliveryProofUrl: string,
 ): Promise<OrderWithLines> {
+  if (!deliveryProofUrl.trim()) {
+    throw new OrderDomainError('DELIVERY_PROOF_REQUIRED', 'La foto de entrega es obligatoria', 400);
+  }
+
   const where: PrismaType.OrderWhereInput =
     actorType === 'admin' || actorType === 'superAdmin'
-      ? { id: orderId, status: 'outForDelivery' }
-      : { deliveryUserId: userId, id: orderId, status: 'outForDelivery' };
+      ? { id: orderId, status: 'delivering' }
+      : { deliveryUserId: userId, id: orderId, status: 'delivering' };
 
   return client.$transaction(async (tx) => {
     const result = await tx.order.updateMany({
       data: {
+        deliveryProofUrl,
         status: 'delivered',
         version: { increment: 1 },
       },
@@ -745,6 +852,14 @@ export async function markOrderDelivered(
         409,
       );
     }
+
+    await appendOrderStatusHistory(tx, {
+      changedByUserId: userId,
+      fromStatus: 'delivering',
+      orderId,
+      toStatus: 'delivered',
+    });
+
     const updated = await tx.order.findUnique({ where: { id: orderId } });
     if (!updated) throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
     return serializeOrder(updated);
@@ -771,6 +886,92 @@ export async function notifyOrderPaid(
     totalAmount: order.totalAmount,
   });
   emitKitchenNewPaid(order);
+}
+
+export async function startOrderDelivering(
+  actorType: UserType,
+  orderId: string,
+  actorUserId: string,
+): Promise<OrderWithLines> {
+  const isAdmin = actorType === 'admin' || actorType === 'superAdmin';
+  const where: PrismaType.OrderWhereInput = isAdmin
+    ? { id: orderId, status: 'assignedToDeliveryDriver' }
+    : {
+        deliveryUserId: actorUserId,
+        id: orderId,
+        status: 'assignedToDeliveryDriver',
+      };
+
+  return client.$transaction(async (tx) => {
+    const result = await tx.order.updateMany({
+      data: {
+        status: 'delivering',
+        version: { increment: 1 },
+      },
+      where,
+    });
+    if (result.count === 0) {
+      throw new OrderDomainError(
+        'ORDER_NOT_ASSIGNED',
+        'El pedido no está asignado o no pertenece a este repartidor',
+        409,
+      );
+    }
+
+    await appendOrderStatusHistory(tx, {
+      changedByUserId: actorUserId,
+      fromStatus: 'assignedToDeliveryDriver',
+      orderId,
+      toStatus: 'delivering',
+    });
+
+    const updated = await tx.order.findUnique({ where: { id: orderId } });
+    if (!updated) throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
+    return serializeOrder(updated);
+  });
+}
+
+export async function unassignOrderFromDelivery(
+  orderId: string,
+  changedByUserId: string,
+): Promise<OrderWithLines> {
+  return client.$transaction(async (tx) => {
+    const order = await tx.order.findUnique({ where: { id: orderId } });
+    if (!order) throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
+    if (order.status !== 'assignedToDeliveryDriver') {
+      throw new OrderDomainError(
+        'INVALID_STATUS_TRANSITION',
+        'Solo se puede rechazar la asignación mientras la orden está asignada al repartidor',
+        400,
+      );
+    }
+
+    const result = await tx.order.updateMany({
+      data: {
+        deliveryUserId: null,
+        status: 'readyForDelivery',
+        version: { increment: 1 },
+      },
+      where: {
+        id: orderId,
+        status: 'assignedToDeliveryDriver',
+      },
+    });
+    if (result.count === 0) {
+      throw new OrderDomainError('ORDER_CONFLICT', 'El pedido cambió de forma concurrente', 409);
+    }
+
+    await appendOrderStatusHistory(tx, {
+      changedByUserId,
+      fromStatus: 'assignedToDeliveryDriver',
+      orderId,
+      toStatus: 'readyForDelivery',
+    });
+
+    const updated = await tx.order.findUnique({ where: { id: orderId } });
+    if (!updated) throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
+    return serializeOrder(updated);
+  });
 }
 
 export async function updatePendingOrderLines(
@@ -833,7 +1034,8 @@ export async function verifyMobilePaymentP2c(
 
   const invoice = reconciledPreview.order.id.replace(/-/g, '').slice(0, 20);
   const orderAmount = reconciledPreview.order.totalAmount;
-  const amount = resolveMegasoftAmount(orderAmount);
+  const usdRate = await getUsdVesRate();
+  const amount = await resolveMegasoftAmount(orderAmount);
 
   if (!megasoftConfig.certHardcoded && megasoftConfig.amountOverride === null) {
     if (Math.abs(details.amount - amount) > 0.01) {
@@ -941,8 +1143,12 @@ export async function verifyMobilePaymentP2c(
     }
 
     const paidAt = new Date();
+    const delivery = await resolveDeliverySnapshot(tx, userId, details.deliveryAddress);
     const updated = await tx.order.updateMany({
       data: {
+        deliveryAddress: delivery.deliveryAddress,
+        deliveryPhone: delivery.deliveryPhone,
+        exchangeRate: new Prisma.Decimal(usdRate),
         paidAt,
         paymentDate: paidAt,
         paymentMethod: 'mobilePayment',
@@ -968,6 +1174,13 @@ export async function verifyMobilePaymentP2c(
       }
       throw new OrderDomainError('ORDER_NOT_PENDING', 'El pedido no está pendiente', 409);
     }
+
+    await appendOrderStatusHistory(tx, {
+      changedByUserId: userId,
+      fromStatus: 'pending',
+      orderId: order.id,
+      toStatus: 'paymentConfirmed',
+    });
 
     await tx.payment.upsert({
       create: {
@@ -1020,17 +1233,29 @@ export async function verifyPaymentByAdmin(
   return client.$transaction(async (tx) => {
     const order = await tx.order.findUnique({ where: { id: orderId } });
     if (!order) throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
-    if (order.status !== 'pending') {
-      throw new OrderDomainError('INVALID_STATUS_TRANSITION', 'El pedido no está pendiente', 400);
+    if (order.status !== 'paymentPendingConfirmation') {
+      throw new OrderDomainError(
+        'INVALID_STATUS_TRANSITION',
+        'El pedido no está en pago por confirmar',
+        400,
+      );
     }
 
     if (verify) {
       const updated = await tx.order.update({
         data: {
+          exchangeRate: new Prisma.Decimal(await getUsdVesRate()),
           status: 'paymentConfirmed',
           version: { increment: 1 },
         },
-        where: { id: orderId, status: 'pending' },
+        where: { id: orderId, status: 'paymentPendingConfirmation' },
+      });
+
+      await appendOrderStatusHistory(tx, {
+        changedByUserId: adminUserId,
+        fromStatus: 'paymentPendingConfirmation',
+        orderId,
+        toStatus: 'paymentConfirmed',
       });
 
       await tx.payment.update({
@@ -1086,19 +1311,12 @@ async function applyStoreIdToPendingOrder(
   });
 }
 
-function endOfDayDate(date: Date): Date {
-  const value = new Date(date);
-  value.setHours(23, 59, 59, 999);
-  return value;
-}
-
-function startOfDayDate(date: Date): Date {
-  const value = new Date(date);
-  value.setHours(0, 0, 0, 0);
-  return value;
-}
-
-const CANCELLABLE_STATUSES: OrderStatus[] = ['pending', 'paymentConfirmed', 'preparing'];
+const CANCELLABLE_STATUSES: OrderStatus[] = [
+  'pending',
+  'paymentPendingConfirmation',
+  'paymentConfirmed',
+  'preparing',
+];
 
 export function applyImageUrlsToOrderLines(
   lines: OrderLine[],
@@ -1114,10 +1332,8 @@ export function applyImageUrlsToOrderLines(
 
 export function canTransitionByAdmin(from: OrderStatus, to: OrderStatus): boolean {
   if (to === 'cancelled') return CANCELLABLE_STATUSES.includes(from);
-  if (from === 'pending' && to === 'paymentConfirmed') return true;
   if (from === 'paymentConfirmed' && to === 'preparing') return true;
   if (from === 'preparing' && to === 'readyForDelivery') return true;
-  if (from === 'outForDelivery' && to === 'delivered') return true;
   return false;
 }
 
@@ -1135,6 +1351,25 @@ export function mergeInputsByCode(inputs: CartLineInput[]): CartLineInput[] {
     map.set(code, (map.get(code) ?? 0) + qty);
   }
   return Array.from(map.entries()).map(([code, quantity]) => ({ code, quantity }));
+}
+
+async function appendOrderStatusHistory(
+  tx: Prisma.TransactionClient,
+  params: {
+    changedByUserId: string;
+    fromStatus: OrderStatus;
+    orderId: string;
+    toStatus: OrderStatus;
+  },
+): Promise<void> {
+  await tx.orderStatusHistory.create({
+    data: {
+      changedByUserId: params.changedByUserId,
+      fromStatus: params.fromStatus,
+      orderId: params.orderId,
+      toStatus: params.toStatus,
+    },
+  });
 }
 
 async function enrichOrdersWithProductImages<T extends OrderWithLines>(orders: T[]): Promise<T[]> {
@@ -1251,6 +1486,22 @@ async function reconcileLines(
   return { changes, lines: resultLines };
 }
 
+async function resolveDeliverySnapshot(
+  tx: Pick<Prisma.TransactionClient, 'user'>,
+  userId: string,
+  deliveryAddress?: null | string,
+): Promise<{ deliveryAddress: null | string; deliveryPhone: null | string }> {
+  const user = await tx.user.findUnique({
+    select: { address: true, phone: true },
+    where: { id: userId },
+  });
+  const fromRequest = deliveryAddress?.trim();
+  return {
+    deliveryAddress: fromRequest || user?.address?.trim() || null,
+    deliveryPhone: user?.phone?.trim() || null,
+  };
+}
+
 async function resolveEffectiveStoreId(
   tx: Prisma.TransactionClient,
   storeId: null | string,
@@ -1261,10 +1512,29 @@ async function resolveEffectiveStoreId(
 }
 
 function serializeOrder(order: Order): OrderWithLines {
+  const exchangeRate =
+    order.exchangeRate === null || order.exchangeRate === undefined
+      ? null
+      : Number(order.exchangeRate.toString());
+  const totalAmount = Number(order.totalAmount.toString());
   return {
     ...order,
+    exchangeRate,
     products: toOrderLines(order.products as Prisma.JsonValue),
-    totalAmount: Number(order.totalAmount.toString()),
+    totalAmount,
+    totalAmountBs: exchangeRate === null ? null : Number((totalAmount * exchangeRate).toFixed(2)),
+  };
+}
+
+function serializeOrderWithDeliveryContact(
+  order: Order,
+  user?: { address: null | string; phone: null | string } | null,
+): OrderWithLines {
+  const serialized = serializeOrder(order);
+  return {
+    ...serialized,
+    deliveryAddress: serialized.deliveryAddress ?? user?.address ?? null,
+    deliveryPhone: serialized.deliveryPhone ?? user?.phone ?? null,
   };
 }
 
