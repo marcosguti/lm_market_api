@@ -16,7 +16,7 @@ import {
   findProductById,
   upsertProductStores,
 } from '../../queries/product.js';
-import { findStores } from '../../queries/store.js';
+import { assertStoreIdsActive, findStores, StoreNotFoundError } from '../../queries/store.js';
 import { createSchema } from './schemas.js';
 import { serializeAdminProduct } from './serializeAdminProduct.js';
 
@@ -35,6 +35,10 @@ export async function createAdminProduct(req: AuthRequest, res: Response): Promi
   }
 
   try {
+    if (body.stores?.length) {
+      await assertStoreIdsActive(body.stores.map((s: { storeId: string }) => s.storeId));
+    }
+
     const brandName = normalizeCatalogName(body.brand);
     const departmentName = normalizeCatalogName(body.department);
     const [brand, department] = await Promise.all([
@@ -74,6 +78,10 @@ export async function createAdminProduct(req: AuthRequest, res: Response): Promi
     const refreshed = await findProductById(product.id);
     res.status(201).json({ product: serializeAdminProduct(refreshed!) });
   } catch (e) {
+    if (e instanceof StoreNotFoundError) {
+      res.status(e.statusCode).json({ code: e.code, error: e.message });
+      return;
+    }
     console.error('[admin-products] create failed', e);
     res.status(500).json({ error: 'Error al crear el producto' });
   }

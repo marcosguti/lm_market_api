@@ -1,4 +1,5 @@
 export { assignDelivery } from './assignDelivery.js';
+export { getAdminOrderTracking } from './getAdminOrderTracking.js';
 export { getKitchenOrders } from './getKitchenOrders.js';
 export { getOrderStatusHistory } from './getOrderStatusHistory.js';
 export { patchAdminOrderStatus } from './patchAdminOrderStatus.js';

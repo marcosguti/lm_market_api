@@ -2,6 +2,7 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { assertStoreActive, StoreNotFoundError } from '../../queries/store.js';
 import { listKitchenOrders } from '../../services/orderService.js';
 import { handleOrderError } from '../shared/orderHttp.js';
 import { kitchenListQuerySchema } from './schemas.js';
@@ -14,6 +15,9 @@ export async function getKitchenOrders(req: AuthRequest, res: Response): Promise
   }
   try {
     const { createdFrom, createdTo, id, page, pageSize, status, storeId } = validation.value;
+    if (storeId) {
+      await assertStoreActive(storeId);
+    }
     const userType = req.userType!;
     const result = await listKitchenOrders(page, pageSize, userType, {
       createdFrom,
@@ -24,6 +28,10 @@ export async function getKitchenOrders(req: AuthRequest, res: Response): Promise
     });
     res.json(result);
   } catch (err) {
+    if (err instanceof StoreNotFoundError) {
+      res.status(err.statusCode).json({ code: err.code, error: err.message });
+      return;
+    }
     handleOrderError(err, res);
   }
 }

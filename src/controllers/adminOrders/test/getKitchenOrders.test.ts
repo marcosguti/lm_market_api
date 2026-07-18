@@ -2,13 +2,23 @@ import type { Response } from 'express';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AuthRequest } from '../../../middlewares/auth.js';
+import { StoreNotFoundError } from '../../../queries/store.js';
 import { getKitchenOrders } from '../getKitchenOrders.js';
 
 const listKitchenOrders = vi.fn();
+const assertStoreActive = vi.fn();
 
 vi.mock('../../../services/orderService.js', () => ({
   listKitchenOrders: (...args: unknown[]) => listKitchenOrders(...args),
 }));
+
+vi.mock('../../../queries/store.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../queries/store.js')>();
+  return {
+    ...actual,
+    assertStoreActive: (...args: unknown[]) => assertStoreActive(...args),
+  };
+});
 
 function mockRes(): Response & { statusCode: number; body?: unknown } {
   const res = {
@@ -29,6 +39,7 @@ function mockRes(): Response & { statusCode: number; body?: unknown } {
 describe('getKitchenOrders controller', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    assertStoreActive.mockResolvedValue(undefined);
     listKitchenOrders.mockResolvedValue({
       data: [],
       page: 1,
@@ -84,6 +95,7 @@ describe('getKitchenOrders controller', () => {
 
     await getKitchenOrders(req, res);
 
+    expect(assertStoreActive).toHaveBeenCalledWith('store-1');
     expect(res.statusCode).toBe(200);
     expect(listKitchenOrders).toHaveBeenCalledWith(2, 50, 'admin', {
       createdFrom: expect.any(Date),
@@ -92,6 +104,20 @@ describe('getKitchenOrders controller', () => {
       status: 'preparing',
       storeId: 'store-1',
     });
+  });
+
+  it('returns 400 when storeId is inactive', async () => {
+    assertStoreActive.mockRejectedValue(new StoreNotFoundError());
+    const req = {
+      query: { storeId: 'inactive-store' },
+      userType: 'admin',
+    } as unknown as AuthRequest;
+    const res = mockRes();
+
+    await getKitchenOrders(req, res);
+
+    expect(res.statusCode).toBe(400);
+    expect(listKitchenOrders).not.toHaveBeenCalled();
   });
 
   it('maps empty string filters to undefined', async () => {
@@ -106,6 +132,7 @@ describe('getKitchenOrders controller', () => {
 
     await getKitchenOrders(req, res);
 
+    expect(assertStoreActive).not.toHaveBeenCalled();
     expect(listKitchenOrders).toHaveBeenCalledWith(1, 20, 'superAdmin', {
       createdFrom: undefined,
       createdTo: undefined,

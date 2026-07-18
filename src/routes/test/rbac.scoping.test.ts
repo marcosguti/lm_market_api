@@ -74,21 +74,17 @@ describe('RBAC scoping rules', () => {
       );
     });
 
-    it('calls markOrderDelivered with admin actor', async () => {
+    it('returns 403 for admin without calling markOrderDelivered', async () => {
       mockAuthenticatedUser('admin-1', 'admin');
-      await request(app)
-        .patch(`/api/delivery/orders/${ORDER_ID}/delivered`)
+      const res = await request(app)
+        .patch('/api/delivery/orders/' + ORDER_ID + '/delivered')
         .set(authHeader())
         .attach('deliveryProof', Buffer.from('fake-image'), {
           contentType: 'image/jpeg',
           filename: 'proof.jpg',
         });
-      expect(getOrderMocks().markOrderDelivered).toHaveBeenCalledWith(
-        'admin',
-        ORDER_ID,
-        'admin-1',
-        'https://cdn/delivery/proof.jpg',
-      );
+      expect(res.status).toBe(403);
+      expect(getOrderMocks().markOrderDelivered).not.toHaveBeenCalled();
     });
   });
 });

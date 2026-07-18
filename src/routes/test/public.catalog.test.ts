@@ -3,7 +3,7 @@ import request from 'supertest';
 
 import './helpers/sharedMocks.js';
 import './helpers/queryMocks.js';
-import { resetQueryMocks } from './helpers/queryMocks.js';
+import { catalogQueryMocks, resetQueryMocks } from './helpers/queryMocks.js';
 import './helpers/orderServiceMocks.js';
 import { resetOrderServiceMocks } from './helpers/orderServiceMocks.js';
 import { createTestApp } from './helpers/createTestApp.js';
@@ -48,6 +48,41 @@ describe('Public catalog routes', () => {
     const res = await request(app).get('/api/stores');
     expect(res.status).toBe(200);
     expect(res.body).toEqual([]);
+  });
+
+  it('GET /api/stores returns only active stores from findStores', async () => {
+    catalogQueryMocks.findStores.mockResolvedValue([
+      {
+        city: 'merida',
+        externalBranchCode: '1',
+        id: 's1',
+        latitude: 8.598136,
+        longitude: -71.150426,
+        name: 'Active Store',
+      },
+    ]);
+    const res = await request(app).get('/api/stores');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([
+      {
+        city: 'merida',
+        externalBranchCode: '1',
+        id: 's1',
+        latitude: 8.598136,
+        longitude: -71.150426,
+        name: 'Active Store',
+      },
+    ]);
+  });
+
+  it('GET /api/products rejects inactive storeId', async () => {
+    const { StoreNotFoundError } = await import('../../queries/store.js');
+    catalogQueryMocks.assertStoreActive.mockRejectedValue(new StoreNotFoundError());
+    const res = await request(app)
+      .get('/api/products')
+      .query({ storeId: '4b8975e4-8daf-41f1-8632-230816673665' });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('STORE_NOT_FOUND');
   });
 
   it('GET /api/banners returns empty list', async () => {

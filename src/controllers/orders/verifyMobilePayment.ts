@@ -38,7 +38,16 @@ export async function verifyMobilePayment(req: AuthRequest, res: Response): Prom
     return;
   }
 
-  const { amount, bankCode, deliveryAddress, nationalId, phone, reference } = validation.value;
+  const {
+    amount,
+    bankCode,
+    deliveryAddress,
+    deliveryLatitude,
+    deliveryLongitude,
+    nationalId,
+    phone,
+    reference,
+  } = validation.value;
 
   const orderPreview = await prisma.order.findUnique({
     select: { id: true, totalAmount: true },
@@ -60,6 +69,8 @@ export async function verifyMobilePayment(req: AuthRequest, res: Response): Prom
       clientBankCode: bankCode,
       clientPhone: phone,
       deliveryAddress: deliveryAddress ?? null,
+      deliveryLatitude,
+      deliveryLongitude,
       nationalId,
       reference,
     });

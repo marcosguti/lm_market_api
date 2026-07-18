@@ -72,6 +72,8 @@ describe('verifyMobilePayment controller extended', () => {
         amount: 100,
         bankCode: '0105',
         deliveryAddress: 'Calle 123',
+        deliveryLatitude: 10.48,
+        deliveryLongitude: -66.9036,
         phone: '04141234567',
         nationalId: 'V12345678',
         reference: 'REF123',

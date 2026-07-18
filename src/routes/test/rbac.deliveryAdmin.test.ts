@@ -54,9 +54,15 @@ describe('RBAC delivery and admin order routes', () => {
       });
     });
 
-    it.each(['admin', 'superAdmin', 'deliveryDriver'] as UserType[])('allows %s', async (role) => {
-      await expectAllowed(app, 'patch', '/api/delivery/orders/:id/start', role, {
+    it('allows deliveryDriver', async () => {
+      await expectAllowed(app, 'patch', '/api/delivery/orders/:id/start', 'deliveryDriver', {
         expectedStatus: 200,
+        pathParams: { id: ORDER_ID },
+      });
+    });
+
+    it.each(['admin', 'superAdmin'] as UserType[])('returns 403 for %s on start', async (role) => {
+      await expectForbidden(app, 'patch', '/api/delivery/orders/:id/start', role, {
         pathParams: { id: ORDER_ID },
       });
     });
@@ -75,12 +81,12 @@ describe('RBAC delivery and admin order routes', () => {
       });
     });
 
-    it.each(['admin', 'superAdmin', 'deliveryDriver'] as UserType[])('allows %s', async (role) => {
+    it('allows deliveryDriver', async () => {
       const { mockAuthenticatedUser, authHeader } = await import('./helpers/authHelpers.js');
       const request = (await import('supertest')).default;
-      mockAuthenticatedUser('u1', role);
+      mockAuthenticatedUser('u1', 'deliveryDriver');
       const res = await request(app)
-        .patch(`/api/delivery/orders/${ORDER_ID}/delivered`)
+        .patch('/api/delivery/orders/' + ORDER_ID + '/delivered')
         .set(authHeader())
         .attach('deliveryProof', Buffer.from('fake-image'), {
           filename: 'proof.jpg',
@@ -88,6 +94,15 @@ describe('RBAC delivery and admin order routes', () => {
         });
       expect(res.status).toBe(200);
     });
+
+    it.each(['admin', 'superAdmin'] as UserType[])(
+      'returns 403 for %s on delivered',
+      async (role) => {
+        await expectForbidden(app, 'patch', '/api/delivery/orders/:id/delivered', role, {
+          pathParams: { id: ORDER_ID },
+        });
+      },
+    );
   });
 
   describe('POST /api/admin/orders/:id/assign-delivery (admin/superAdmin)', () => {

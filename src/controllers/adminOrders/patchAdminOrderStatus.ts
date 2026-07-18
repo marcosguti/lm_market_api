@@ -11,6 +11,7 @@ import {
   emitOrderUpdated,
   emitUserNotification,
 } from '../../realtime/socket.js';
+import { endDeliveryTrackingAndNotify } from '../../services/orderDeliveryTrackingService.js';
 import {
   adminSetOrderStatus,
   createOrderStatusNotification,
@@ -71,6 +72,14 @@ export async function patchAdminOrderStatus(req: AuthRequest, res: Response): Pr
     if (updated.status === 'cancelled') {
       emitOrderCancelled({ orderId: updated.id });
       emitDeliveryOrderCancelled(updated.deliveryUserId, { orderId: updated.id });
+      if (before.status === 'delivering') {
+        await endDeliveryTrackingAndNotify({
+          clientUserId: updated.userId,
+          deliveryUserId: updated.deliveryUserId ?? before.deliveryUserId,
+          orderId: updated.id,
+          reason: 'cancelled',
+        });
+      }
 
       try {
         const customer = await findUserById(updated.userId);

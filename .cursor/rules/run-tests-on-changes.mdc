@@ -13,6 +13,6 @@ Cada vez que agregues o modifiques código en este repo (`src/**`):
 3. **No dejes tests rotos** — si un cambio rompe tests existentes, arréglalos en el mismo cambio.
 4. **RBAC** — si tocas rutas, middlewares o controllers con restricción de rol, actualiza tests en `src/routes/test/` o en el `test/` del módulo correspondiente.
 5. **CI** — el PR no debe mergearse si `npm run lint && npm run test` falla.
-6. **ESLint + perfectionist** — al terminar de resolver el prompt, ejecuta `npm run lint` (`eslint --fix src`) para aplicar autofix de ESLint y `eslint-plugin-perfectionist`. Si queda algún error no auto-fixable, corrígelo en el mismo cambio.
+6. **ESLint + perfectionist (obligatorio al cerrar)** — **antes** de dar por terminado cualquier cambio en `src/**`, ejecuta `npm run lint` (`eslint --fix src`) y verifica que salga limpio (0 errors). Eso autofixa `perfectionist/sort-modules`, `sort-imports`, `sort-named-imports`, etc. Si `--fix` no alcanza, corrige a mano en el mismo cambio. **No dejes nodemon/CI fallando por orden de exports, imports o tipos.**
 
 Prioridad de cobertura: funciones puras → servicios con mocks → rutas HTTP (Supertest).

@@ -28,9 +28,14 @@ vi.mock('../../../queries/brandDepartment.js', async (importOriginal) => {
   };
 });
 
-vi.mock('../../../queries/store.js', () => ({
-  findStores: (...args: unknown[]) => findStores(...args),
-}));
+vi.mock('../../../queries/store.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../queries/store.js')>();
+  return {
+    ...actual,
+    assertStoreIdsActive: vi.fn().mockResolvedValue(undefined),
+    findStores: (...args: unknown[]) => findStores(...args),
+  };
+});
 
 vi.mock('../../../libs/filesInDigitalOcean/index.js', () => ({
   uploadFile: (...args: unknown[]) => uploadFile(...args),

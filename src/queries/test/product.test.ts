@@ -6,6 +6,7 @@ const prismaMocks = vi.hoisted(() => ({
   create: vi.fn(),
   findMany: vi.fn(),
   findUnique: vi.fn(),
+  storeCount: vi.fn(),
   update: vi.fn(),
   upsert: vi.fn(),
 }));
@@ -22,6 +23,9 @@ vi.mock('../../prisma.js', () => ({
     productStore: {
       upsert: prismaMocks.upsert,
     },
+    store: {
+      count: prismaMocks.storeCount,
+    },
   },
 }));
 
@@ -37,6 +41,7 @@ describe('product queries', () => {
     vi.clearAllMocks();
     prismaMocks.findMany.mockResolvedValue([]);
     prismaMocks.count.mockResolvedValue(0);
+    prismaMocks.storeCount.mockResolvedValue(2);
   });
 
   it('createProduct creates with relations include', async () => {
@@ -83,10 +88,14 @@ describe('product queries', () => {
 
   it('upsertProductStores upserts all stores in parallel', async () => {
     prismaMocks.upsert.mockResolvedValue({});
+    prismaMocks.storeCount.mockResolvedValue(2);
     await upsertProductStores('p1', [
       { storeId: 's1', price: 10, stockQuantity: 5 },
       { storeId: 's2', price: 11, stockQuantity: 3 },
     ]);
+    expect(prismaMocks.storeCount).toHaveBeenCalledWith({
+      where: { active: true, id: { in: ['s1', 's2'] } },
+    });
     expect(prismaMocks.upsert).toHaveBeenCalledTimes(2);
   });
 });

@@ -91,6 +91,8 @@ describe('confirmOrderPayment controller', () => {
     const req = {
       body: {
         deliveryAddress: 'Calle 123',
+        deliveryLatitude: 10.48,
+        deliveryLongitude: -66.9036,
         method: 'zelle',
         paidAt: new Date().toISOString(),
         reference: 'REF1',
@@ -107,7 +109,12 @@ describe('confirmOrderPayment controller', () => {
 
   it('returns 400 when cash payment lacks screenshot', async () => {
     const req = {
-      body: { deliveryAddress: 'Calle 123', method: 'cash' },
+      body: {
+        deliveryAddress: 'Calle 123',
+        deliveryLatitude: 10.48,
+        deliveryLongitude: -66.9036,
+        method: 'cash',
+      },
       params: { id: 'o1' },
       userId: 'client-1',
       userType: 'client',
@@ -119,22 +126,9 @@ describe('confirmOrderPayment controller', () => {
     expect(confirmPendingOrderPaymentWithDetails).not.toHaveBeenCalled();
   });
 
-  it('returns 400 when deliveryAddress is missing', async () => {
-    const req = {
-      body: { method: 'cash' },
-      params: { id: 'o1' },
-      userId: 'client-1',
-      userType: 'client',
-    } as AuthRequest;
-    const res = mockRes();
-    await confirmOrderPayment(req, res);
-    expect(res.statusCode).toBe(400);
-    expect(confirmPendingOrderPaymentWithDetails).not.toHaveBeenCalled();
-  });
-
   it('confirms cash payment with screenshot to paymentPendingConfirmation', async () => {
     const req = {
-      body: { deliveryAddress: 'Calle 123', method: 'cash' },
+      body: { method: 'cash' },
       file: {
         buffer: Buffer.from('img'),
         mimetype: 'image/jpeg',
@@ -148,8 +142,11 @@ describe('confirmOrderPayment controller', () => {
     expect(res.statusCode).toBe(200);
     expect(uploadPaymentScreenshot).toHaveBeenCalled();
     expect(confirmPendingOrderPaymentWithDetails).toHaveBeenCalledWith('client-1', 'o1', {
-      deliveryAddress: 'Calle 123',
+      deliveryAddress: null,
+      deliveryLatitude: undefined,
+      deliveryLongitude: undefined,
       method: 'cash',
+      note: null,
       paidAt: null,
       reference: null,
       screenshotUrl: 'https://cdn.example/proof.jpg',

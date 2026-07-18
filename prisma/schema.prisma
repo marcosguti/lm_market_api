@@ -42,20 +42,23 @@ enum PaymentMethod {
 }
 
 model User {
-  id            String       @id @default(uuid())
-  address       String?
-  createdAt     DateTime     @default(now())
-  email         String       @unique
-  firstName     String
-  lastName      String
-  numberId      String       @unique
-  numberIdType  NumberIdType
-  password      String
-  phone         String?      @unique
-  phoneVerified Boolean      @default(false)
-  emailVerified Boolean      @default(false)
-  type          UserType
-  updatedAt     DateTime     @updatedAt
+  id                String       @id @default(uuid())
+  address           String?
+  addressCity       String?      @db.VarChar(32)
+  addressLatitude   Decimal?     @db.Decimal(10, 7)
+  addressLongitude  Decimal?     @db.Decimal(10, 7)
+  createdAt         DateTime     @default(now())
+  email             String       @unique
+  firstName         String
+  lastName          String
+  numberId          String       @unique
+  numberIdType      NumberIdType
+  password          String
+  phone             String?      @unique
+  phoneVerified     Boolean      @default(false)
+  emailVerified     Boolean      @default(false)
+  type              UserType
+  updatedAt         DateTime     @updatedAt
 
   linkedDevices          LinkedDevice[]
   notifications          Notification[]
@@ -138,6 +141,10 @@ model Store {
   id                 String   @id @default(uuid())
   name               String   @db.VarChar(100)
   externalBranchCode String   @unique @db.VarChar(50)
+  active             Boolean  @default(true)
+  city               String?  @db.VarChar(32)
+  latitude           Decimal? @db.Decimal(10, 7)
+  longitude          Decimal? @db.Decimal(10, 7)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
@@ -145,6 +152,7 @@ model Store {
   orders        Order[]
 
   @@index([externalBranchCode])
+  @@index([active])
 }
 
 model ProductStore {
@@ -186,6 +194,8 @@ model Order {
   paidAt               DateTime?
   deliveryUserId       String?
   deliveryAddress      String?
+  deliveryLatitude     Decimal?       @db.Decimal(10, 7)
+  deliveryLongitude    Decimal?       @db.Decimal(10, 7)
   deliveryPhone        String?
   customerNotes        String?
   idempotencyKey       String?        @unique
@@ -199,17 +209,41 @@ model Order {
   deliveryProofUrl     String?
   cancellationReason   String?
 
-  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
-  deliveryUser  User?                @relation("OrderDeliveryUser", fields: [deliveryUserId], references: [id])
-  store         Store?               @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveryUser  User?                  @relation("OrderDeliveryUser", fields: [deliveryUserId], references: [id])
+  store         Store?                 @relation(fields: [storeId], references: [id], onDelete: SetNull)
   notifications Notification[]
   payment       Payment?
   statusHistory OrderStatusHistory[]
+  tracking      OrderDeliveryTracking?
 
   @@index([userId, status])
   @@index([status])
   @@index([deliveryUserId])
   @@index([storeId])
+}
+
+model OrderDeliveryTracking {
+  orderId           String   @id
+  latitude          Decimal  @db.Decimal(10, 7)
+  longitude         Decimal  @db.Decimal(10, 7)
+  accuracyMeters    Float?
+  headingDegrees    Float?
+  speedMps           Float?
+  deviceRecordedAt   DateTime?
+  serverReceivedAt  DateTime @default(now())
+  trackingSessionId String?
+  deviceId          String?
+  routeGeometry     Json?
+  distanceMeters    Float?
+  etaSeconds         Int?
+  routeCalculatedAt DateTime?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([serverReceivedAt])
 }
 
 model OrderStatusHistory {
@@ -231,6 +265,7 @@ model Payment {
   id                    String        @id @default(uuid())
   orderId               String        @unique
   method                PaymentMethod
+  note                  String?       @db.VarChar(100)
   reference             String
   paidAt                DateTime
   screenshotUrl         String?
@@ -248,6 +283,15 @@ model Payment {
   updatedAt             DateTime      @updatedAt
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+}
+
+model PaymentMethodConfig {
+  method      PaymentMethod @id
+  active      Boolean       @default(true)
+  information String?       @db.Text
+  placeholder String?       @db.VarChar(200)
+  noteEnabled Boolean       @default(false)
+  updatedAt   DateTime      @updatedAt
 }
 
 model Notification {

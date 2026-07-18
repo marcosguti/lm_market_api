@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const txMocks = vi.hoisted(() => ({
   order: {
+    count: vi.fn(),
     create: vi.fn(),
     findFirst: vi.fn(),
     findUnique: vi.fn(),
@@ -16,6 +17,9 @@ const txMocks = vi.hoisted(() => ({
     update: vi.fn(),
     upsert: vi.fn(),
   },
+  paymentMethodConfig: {
+    findUnique: vi.fn(),
+  },
   product: {
     findMany: vi.fn(),
     updateMany: vi.fn(),
@@ -25,6 +29,7 @@ const txMocks = vi.hoisted(() => ({
     updateMany: vi.fn(),
   },
   store: {
+    findFirst: vi.fn(),
     findMany: vi.fn(),
     findUnique: vi.fn(),
   },
@@ -79,6 +84,9 @@ vi.mock('../../prisma.js', () => ({
     },
     orderStatusHistory: {
       findMany: vi.fn(),
+    },
+    paymentMethodConfig: {
+      findUnique: (...args: unknown[]) => txMocks.paymentMethodConfig.findUnique(...args),
     },
     product: { findMany: vi.fn() },
   },
@@ -164,7 +172,11 @@ function seedProductWithStock(
   const product = { ...makeProduct(), code };
   if (storeId) {
     txMocks.store.findMany.mockResolvedValue([{ id: storeId }]);
-    txMocks.store.findUnique.mockResolvedValue({ id: storeId, name: 'Store 1' });
+    txMocks.store.findUnique.mockResolvedValue({
+      city: 'merida',
+      id: storeId,
+      name: 'Store 1',
+    });
     txMocks.product.findMany.mockResolvedValue([product]);
     txMocks.productStore.findMany.mockResolvedValue([
       {
@@ -211,13 +223,25 @@ describe('orderService async flows', () => {
       };
     });
     txMocks.order.updateMany.mockResolvedValue({ count: 1 });
+    txMocks.order.count.mockResolvedValue(0);
     txMocks.orderStatusHistory.create.mockResolvedValue({});
     txMocks.payment.update.mockResolvedValue({});
     txMocks.payment.upsert.mockResolvedValue({});
+    txMocks.paymentMethodConfig.findUnique.mockResolvedValue({
+      active: true,
+      information: null,
+      method: 'cash',
+      noteEnabled: true,
+      placeholder: 'Toma una foto legible del billete',
+      updatedAt: new Date(),
+    });
     txMocks.productStore.updateMany.mockResolvedValue({ count: 1 });
     txMocks.product.updateMany.mockResolvedValue({ count: 1 });
     txMocks.user.findUnique.mockResolvedValue({
       address: 'Calle Falsa 123',
+      addressCity: 'merida',
+      addressLatitude: new Prisma.Decimal('8.5897000'),
+      addressLongitude: new Prisma.Decimal('-71.1561000'),
       phone: '04141234567',
       type: 'client',
     });
@@ -325,7 +349,6 @@ describe('orderService async flows', () => {
       }));
 
       const result = await confirmPendingOrderPaymentWithDetails('u1', 'o1', {
-        deliveryAddress: 'Calle 123',
         method: 'cash',
         screenshotUrl: 'https://cdn/proof.jpg',
       });
@@ -335,7 +358,7 @@ describe('orderService async flows', () => {
       expect(txMocks.order.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            deliveryAddress: 'Calle 123',
+            deliveryAddress: 'Calle Falsa 123',
             status: 'paymentPendingConfirmation',
           }),
         }),
@@ -348,6 +371,88 @@ describe('orderService async flows', () => {
           }),
         }),
       );
+    });
+
+    it('throws ADDRESS_REQUIRED when profile has no delivery pin', async () => {
+      setupProductLine();
+      txMocks.user.findUnique.mockResolvedValue({
+        address: null,
+        addressCity: null,
+        addressLatitude: null,
+        addressLongitude: null,
+        phone: '04141234567',
+        type: 'client',
+      });
+      const pending = makeOrder({
+        products: [
+          {
+            code: 'SKU1',
+            description: null,
+            lineTotal: 10,
+            name: 'Product 1',
+            quantity: 1,
+            unitPrice: 10,
+          },
+        ],
+      });
+      txMocks.order.findUnique.mockResolvedValue(pending);
+      txMocks.order.update.mockResolvedValue(pending);
+      txMocks.product.updateMany.mockResolvedValue({ count: 1 });
+
+      await expect(
+        confirmPendingOrderPaymentWithDetails('u1', 'o1', {
+          method: 'cash',
+          screenshotUrl: 'https://cdn/proof.jpg',
+        }),
+      ).rejects.toMatchObject({ code: 'ADDRESS_REQUIRED', statusCode: 409 });
+    });
+
+    it('throws ADDRESS_CITY_MISMATCH when profile city differs from store', async () => {
+      setupProductLine();
+      txMocks.user.findUnique.mockResolvedValue({
+        address: 'Centro Tovar',
+        addressCity: 'tovar',
+        addressLatitude: new Prisma.Decimal('8.3305000'),
+        addressLongitude: new Prisma.Decimal('-71.7575000'),
+        phone: '04141234567',
+        type: 'client',
+      });
+      txMocks.store.findUnique.mockResolvedValue({
+        city: 'merida',
+        id: 'store-1',
+        name: 'Las Americas',
+      });
+      const pending = makeOrder({
+        products: [
+          {
+            code: 'SKU1',
+            description: null,
+            lineTotal: 10,
+            name: 'Product 1',
+            quantity: 1,
+            unitPrice: 10,
+          },
+        ],
+        storeId: 'store-1',
+      });
+      txMocks.order.findUnique.mockResolvedValue(pending);
+      txMocks.order.update.mockResolvedValue(pending);
+      txMocks.productStore.findMany.mockResolvedValue([
+        {
+          price: new Prisma.Decimal(10),
+          productId: 'p1',
+          stockQuantity: 5,
+          storeId: 'store-1',
+        },
+      ]);
+      txMocks.productStore.updateMany.mockResolvedValue({ count: 1 });
+
+      await expect(
+        confirmPendingOrderPaymentWithDetails('u1', 'o1', {
+          method: 'cash',
+          screenshotUrl: 'https://cdn/proof.jpg',
+        }),
+      ).rejects.toMatchObject({ code: 'ADDRESS_CITY_MISMATCH', statusCode: 409 });
     });
   });
 
@@ -837,7 +942,7 @@ describe('orderService async flows', () => {
   describe('applyStoreIdToPendingOrder via updatePendingOrderLines', () => {
     it('throws STORE_NOT_FOUND for unknown store', async () => {
       txMocks.order.findUnique.mockResolvedValue(makeOrder());
-      txMocks.store.findUnique.mockResolvedValue(null);
+      txMocks.store.findFirst.mockResolvedValue(null);
 
       await expect(
         updatePendingOrderLines('u1', 'o1', [{ code: 'SKU1', quantity: 1 }], 'unknown-store'),
@@ -852,7 +957,7 @@ describe('orderService async flows', () => {
           storeId: 'store-a',
         }),
       );
-      txMocks.store.findUnique.mockResolvedValue({ id: 'store-b', name: 'Other' });
+      txMocks.store.findFirst.mockResolvedValue({ id: 'store-b', name: 'Other', active: true });
 
       await expect(
         updatePendingOrderLines('u1', 'o1', [{ code: 'SKU1', quantity: 1 }], 'store-b'),
@@ -1291,18 +1396,14 @@ describe('orderService async flows', () => {
     });
   });
 
-  describe('markOrderDelivered admin path', () => {
-    it('marks order delivered when actor is admin', async () => {
-      txMocks.order.updateMany.mockResolvedValue({ count: 1 });
-      txMocks.order.findUnique.mockResolvedValue(makeOrder({ status: 'delivered' }));
-
-      const result = await markOrderDelivered(
-        'superAdmin',
-        'o1',
-        'admin-1',
-        'https://cdn/proof.jpg',
-      );
-      expect(result.status).toBe('delivered');
+  describe('markOrderDelivered non-driver forbidden', () => {
+    it('rejects admin marking delivered', async () => {
+      await expect(
+        markOrderDelivered('superAdmin', 'o1', 'admin-1', 'https://cdn/proof.jpg'),
+      ).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+        statusCode: 403,
+      });
     });
 
     it('throws ORDER_NOT_IN_DELIVERY when update fails', async () => {

@@ -21,7 +21,11 @@ export function serializeAdminProduct(p: ProductWithRelations) {
       price: Number(ps.price.toString()),
       productId: ps.productId,
       stockQuantity: ps.stockQuantity,
-      store: ps.store,
+      store: {
+        externalBranchCode: ps.store.externalBranchCode,
+        id: ps.store.id,
+        name: ps.store.name,
+      },
       storeId: ps.storeId,
     })),
     totalStock: firstStore ? firstStore.stockQuantity : null,

@@ -88,6 +88,12 @@ export const updateProfileSchema = Joi.object({
   phone: phoneSchema.optional(),
 });
 
+export const putDeliveryAddressSchema = Joi.object({
+  expectedCity: Joi.string().valid('merida', 'tovar').optional(),
+  latitude: Joi.number().min(-90).max(90).required(),
+  longitude: Joi.number().min(-180).max(180).required(),
+});
+
 export const changePasswordSchema = Joi.object({
   currentPassword: Joi.string().required(),
   newPassword: Joi.string()

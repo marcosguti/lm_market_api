@@ -4,6 +4,7 @@ import type { AuthRequest } from '../../middlewares/auth.js';
 import type { AdminProductActiveFilter } from '../../queries/product.js';
 
 import { findAdminProductsPaginated } from '../../queries/product.js';
+import { assertStoreActive, StoreNotFoundError } from '../../queries/store.js';
 import { listQuerySchema } from './schemas.js';
 import { serializeAdminProduct } from './serializeAdminProduct.js';
 
@@ -14,6 +15,18 @@ export async function listAdminProducts(req: AuthRequest, res: Response): Promis
     return;
   }
   const { active, brand, department, page, pageSize, search, sort, storeId } = validation.value;
+
+  if (storeId) {
+    try {
+      await assertStoreActive(storeId);
+    } catch (e) {
+      if (e instanceof StoreNotFoundError) {
+        res.status(e.statusCode).json({ code: e.code, error: e.message });
+        return;
+      }
+      throw e;
+    }
+  }
 
   const result = await findAdminProductsPaginated({
     active: active as AdminProductActiveFilter,

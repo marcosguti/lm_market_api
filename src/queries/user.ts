@@ -1,5 +1,6 @@
-import type { NumberIdType, Prisma, User, UserType } from '@prisma/client';
-import type { PrismaClient } from '@prisma/client';
+import type { NumberIdType, PrismaClient, User, UserType } from '@prisma/client';
+
+import { Prisma } from '@prisma/client';
 
 import prisma from '../prisma.js';
 
@@ -105,11 +106,32 @@ export async function listUsersPaginated(params: {
 
 export async function updateUser(
   userId: string,
-  data: { address?: string; firstName?: string; lastName?: string; phone?: string },
+  data: {
+    address?: string;
+    addressCity?: null | string;
+    addressLatitude?: null | number;
+    addressLongitude?: null | number;
+    firstName?: string;
+    lastName?: string;
+    phone?: string;
+  },
 ): Promise<User> {
   return prisma.user.update({
     data: {
       ...(data.address !== undefined && { address: data.address || null }),
+      ...(data.addressCity !== undefined && { addressCity: data.addressCity }),
+      ...(data.addressLatitude !== undefined && {
+        addressLatitude:
+          data.addressLatitude === null
+            ? null
+            : new Prisma.Decimal(data.addressLatitude.toFixed(7)),
+      }),
+      ...(data.addressLongitude !== undefined && {
+        addressLongitude:
+          data.addressLongitude === null
+            ? null
+            : new Prisma.Decimal(data.addressLongitude.toFixed(7)),
+      }),
       ...(data.firstName !== undefined && { firstName: data.firstName }),
       ...(data.lastName !== undefined && { lastName: data.lastName }),
       ...(data.phone !== undefined && { phone: data.phone || null }),

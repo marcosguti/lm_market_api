@@ -5,6 +5,7 @@ import {
   getCart,
   getOrderById,
   getOrderHistory,
+  getOrderTracking,
   patchCartLines,
   verifyMobilePayment,
 } from '../controllers/orders/index.js';
@@ -18,6 +19,7 @@ router.use(requireRole(['client']));
 
 router.get('/cart', getCart);
 router.get('/history', getOrderHistory);
+router.get('/:id/tracking', getOrderTracking);
 router.get('/:id', getOrderById);
 router.patch('/:id/lines', patchCartLines);
 router.post('/:id/confirm-payment', paymentScreenshotUploadMiddleware, confirmOrderPayment);

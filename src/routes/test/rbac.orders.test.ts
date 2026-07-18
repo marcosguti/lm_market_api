@@ -130,6 +130,8 @@ describe('RBAC orders routes (client only via asClient)', () => {
           filename: 'proof.jpg',
         })
         .field('deliveryAddress', 'Calle 123')
+        .field('deliveryLatitude', '10.48')
+        .field('deliveryLongitude', '-66.9036')
         .field('method', 'cash');
       expect(res.status).toBe(200);
     });
@@ -140,6 +142,8 @@ describe('RBAC orders routes (client only via asClient)', () => {
       amount: 10,
       bankCode: '0102',
       deliveryAddress: 'Calle 123',
+      deliveryLatitude: 10.48,
+      deliveryLongitude: -66.9036,
       nationalId: 'V12345678',
       phone: '04141234567',
       reference: '123456',

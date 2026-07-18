@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 
 import prisma from '../prisma.js';
 import { buildBrandFilter, buildDepartmentFilter } from './brandDepartment.js';
+import { assertStoreIdsActive } from './store.js';
 
 export type AdminProductActiveFilter = 'all' | 'false' | 'true';
 
@@ -38,13 +39,20 @@ export interface FindProductsPaginatedResult {
 
 export type ProductListSort = 'priceAsc' | 'priceDesc';
 export type ProductWithRelations = Prisma.ProductGetPayload<{
-  include: { brandRef: true; departmentRef: true; productStores: { include: { store: true } } };
+  include: {
+    brandRef: true;
+    departmentRef: true;
+    productStores: { include: { store: true }; where: { store: { active: true } } };
+  };
 }>;
 
 const productInclude = {
   brandRef: true,
   departmentRef: true,
-  productStores: { include: { store: true } },
+  productStores: {
+    include: { store: true },
+    where: { store: { active: true } },
+  },
 } as const;
 const MIN_PUBLIC_STOCK = 10;
 
@@ -74,7 +82,7 @@ export async function findAdminProductsPaginated(
   const activeWhere: Prisma.ProductWhereInput =
     active === 'all' ? {} : { active: active === 'true' };
 
-  const storeFilter = storeId ? { storeId } : {};
+  const storeFilter = storeId ? { store: { active: true }, storeId } : {};
 
   const where: Prisma.ProductWhereInput = {
     ...activeWhere,
@@ -209,6 +217,7 @@ export async function upsertProductStores(
   productId: string,
   stores: { price: number; stockQuantity: number; storeId: string }[],
 ) {
+  await assertStoreIdsActive(stores.map((s) => s.storeId));
   await Promise.all(
     stores.map((s) => upsertProductStore(productId, s.storeId, s.price, s.stockQuantity)),
   );

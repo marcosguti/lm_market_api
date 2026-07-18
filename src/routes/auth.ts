@@ -5,6 +5,7 @@ import {
   getMe,
   login,
   logout,
+  putDeliveryAddress,
   refresh,
   register,
   requestPasswordReset,
@@ -34,6 +35,7 @@ router.post('/refresh', refresh);
 
 router.get('/me', requireAuth, getMe);
 router.patch('/cuenta', requireAuth, updateProfile);
+router.put('/delivery-address', requireAuth, putDeliveryAddress);
 router.post('/cambiar-password', requireAuth, changePassword);
 
 export default router;

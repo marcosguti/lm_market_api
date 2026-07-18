@@ -105,10 +105,12 @@ describe('Orders business integration', () => {
     });
 
     it('returns 400 when cash payment lacks screenshot', async () => {
-      const res = await request(app)
-        .post('/api/orders/o1/confirm-payment')
-        .set(authHeader())
-        .send({ deliveryAddress: 'Calle 123', method: 'cash' });
+      const res = await request(app).post('/api/orders/o1/confirm-payment').set(authHeader()).send({
+        deliveryAddress: 'Calle 123',
+        deliveryLatitude: 10.48,
+        deliveryLongitude: -66.9036,
+        method: 'cash',
+      });
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/comprobante/i);
       expect(orderMocks.confirmPendingOrderPaymentWithDetails).not.toHaveBeenCalled();
@@ -117,6 +119,8 @@ describe('Orders business integration', () => {
     it('returns 400 when non-cash payment lacks screenshot', async () => {
       const res = await request(app).post('/api/orders/o1/confirm-payment').set(authHeader()).send({
         deliveryAddress: 'Calle 123',
+        deliveryLatitude: 10.48,
+        deliveryLongitude: -66.9036,
         method: 'zelle',
         reference: 'REF1',
         paidAt: new Date().toISOString(),
@@ -144,6 +148,8 @@ describe('Orders business integration', () => {
           filename: 'proof.jpg',
         })
         .field('deliveryAddress', 'Calle 123')
+        .field('deliveryLatitude', '10.48')
+        .field('deliveryLongitude', '-66.9036')
         .field('method', 'cash');
       expect(res.status).toBe(200);
       expect(orderMocks.confirmPendingOrderPaymentWithDetails).toHaveBeenCalled();
@@ -168,6 +174,8 @@ describe('Orders business integration', () => {
           filename: 'proof.jpg',
         })
         .field('deliveryAddress', 'Calle 123')
+        .field('deliveryLatitude', '10.48')
+        .field('deliveryLongitude', '-66.9036')
         .field('method', 'zelle')
         .field('reference', 'REF1')
         .field('paidAt', new Date().toISOString());
@@ -187,6 +195,8 @@ describe('Orders business integration', () => {
           filename: 'proof.jpg',
         })
         .field('deliveryAddress', 'Calle 123')
+        .field('deliveryLatitude', '10.48')
+        .field('deliveryLongitude', '-66.9036')
         .field('method', 'cash');
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('ORDER_NOT_PENDING');
@@ -215,6 +225,8 @@ describe('Orders business integration', () => {
           amount: 100,
           bankCode: '0105',
           deliveryAddress: 'Calle 123',
+          deliveryLatitude: 10.48,
+          deliveryLongitude: -66.9036,
           nationalId: 'V12345678',
           phone: '04141234567',
           reference: 'REF123',
@@ -234,6 +246,8 @@ describe('Orders business integration', () => {
           amount: 100,
           bankCode: '0105',
           deliveryAddress: 'Calle 123',
+          deliveryLatitude: 10.48,
+          deliveryLongitude: -66.9036,
           nationalId: 'V12345678',
           phone: '04141234567',
           reference: 'REF123',

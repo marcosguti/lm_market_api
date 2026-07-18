@@ -10,6 +10,7 @@ import {
   emitOrderUpdated,
   emitUserNotification,
 } from '../../realtime/socket.js';
+import { endDeliveryTrackingAndNotify } from '../../services/orderDeliveryTrackingService.js';
 import {
   createOrderStatusNotification,
   getAnyOrderById,
@@ -65,6 +66,12 @@ export async function markDeliveryOrderAsDelivered(req: AuthRequest, res: Respon
       if (driverId) {
         emitOrderUpdated(driverId, orderPayload);
       }
+      await endDeliveryTrackingAndNotify({
+        clientUserId: updated.userId,
+        deliveryUserId: driverId,
+        orderId: updated.id,
+        reason: 'delivered',
+      });
     }
     res.json({ order: updated });
   } catch (err) {

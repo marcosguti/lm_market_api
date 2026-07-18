@@ -50,3 +50,7 @@ vi.mock('../../../libs/filesInDigitalOcean/index.js', () => ({
   uploadFile: vi.fn().mockResolvedValue('https://cdn.example/file.jpg'),
   uploadPaymentScreenshot: vi.fn().mockResolvedValue('https://cdn.example/screenshot.jpg'),
 }));
+
+vi.mock('../../../services/orderDeliveryTrackingService.js', () => ({
+  endDeliveryTrackingAndNotify: vi.fn().mockResolvedValue(undefined),
+}));

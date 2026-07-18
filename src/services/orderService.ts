@@ -39,7 +39,12 @@ export interface OrderLine {
   unitPrice: number;
 }
 
-export interface OrderWithLines extends Omit<Order, 'exchangeRate' | 'products' | 'totalAmount'> {
+export interface OrderWithLines extends Omit<
+  Order,
+  'deliveryLatitude' | 'deliveryLongitude' | 'exchangeRate' | 'products' | 'totalAmount'
+> {
+  deliveryLatitude: null | number;
+  deliveryLongitude: null | number;
   exchangeRate: null | number;
   products: OrderLine[];
   storeName?: null | string;
@@ -58,6 +63,7 @@ export interface SerializedPayment {
   createdAt: Date;
   id: string;
   method: Payment['method'];
+  note: null | string;
   paidAt: Date;
   reference: string;
   screenshotUrl: null | string;
@@ -81,7 +87,10 @@ const client = prisma as PrismaClient;
 
 export interface ConfirmPaymentDetails {
   deliveryAddress?: null | string;
+  deliveryLatitude?: null | number;
+  deliveryLongitude?: null | number;
   method: 'binance' | 'cash' | 'mobilePayment' | 'zelle';
+  note?: null | string;
   paidAt?: Date | null;
   reference?: null | string;
   screenshotUrl?: null | string;
@@ -100,6 +109,8 @@ export interface MobilePaymentP2cDetails {
   clientBankCode: string;
   clientPhone: string;
   deliveryAddress?: null | string;
+  deliveryLatitude?: null | number;
+  deliveryLongitude?: null | number;
   nationalId: string;
   reference: string;
 }
@@ -311,10 +322,12 @@ export async function confirmPendingOrderPayment(
       }
     }
 
-    const delivery = await resolveDeliverySnapshot(tx, userId);
+    const delivery = await resolveDeliverySnapshot(tx, userId, order.storeId);
     const updated = await tx.order.updateMany({
       data: {
         deliveryAddress: delivery.deliveryAddress,
+        deliveryLatitude: delivery.deliveryLatitude,
+        deliveryLongitude: delivery.deliveryLongitude,
         deliveryPhone: delivery.deliveryPhone,
         exchangeRate: new Prisma.Decimal(await getUsdVesRate()),
         paidAt: new Date(),
@@ -355,6 +368,33 @@ export async function confirmPendingOrderPaymentWithDetails(
   details: ConfirmPaymentDetails,
 ): Promise<{ changes: InventoryChange[]; order: OrderWithLines }> {
   return client.$transaction(async (tx) => {
+    const methodConfig = await tx.paymentMethodConfig.findUnique({
+      where: { method: details.method },
+    });
+    if (!methodConfig?.active) {
+      throw new OrderDomainError(
+        'PAYMENT_METHOD_INACTIVE',
+        'El método de pago no está disponible',
+        400,
+      );
+    }
+
+    const trimmedNote = details.note?.trim() || null;
+    if (trimmedNote && !methodConfig.noteEnabled) {
+      throw new OrderDomainError(
+        'PAYMENT_NOTE_NOT_ALLOWED',
+        'Este método de pago no admite nota',
+        400,
+      );
+    }
+    if (trimmedNote && trimmedNote.length > 100) {
+      throw new OrderDomainError(
+        'PAYMENT_NOTE_TOO_LONG',
+        'La nota no puede superar 100 caracteres',
+        400,
+      );
+    }
+
     let order = await tx.order.findUnique({ where: { id: orderId } });
     if (!order || order.userId !== userId) {
       throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
@@ -416,10 +456,12 @@ export async function confirmPendingOrderPaymentWithDetails(
     }
 
     const paidAt = details.paidAt ?? new Date();
-    const delivery = await resolveDeliverySnapshot(tx, userId, details.deliveryAddress);
+    const delivery = await resolveDeliverySnapshot(tx, userId, order.storeId);
     const updatedCount = await tx.order.updateMany({
       data: {
         deliveryAddress: delivery.deliveryAddress,
+        deliveryLatitude: delivery.deliveryLatitude,
+        deliveryLongitude: delivery.deliveryLongitude,
         deliveryPhone: delivery.deliveryPhone,
         exchangeRate: new Prisma.Decimal(await getUsdVesRate()),
         paidAt,
@@ -452,6 +494,7 @@ export async function confirmPendingOrderPaymentWithDetails(
     await tx.payment.upsert({
       create: {
         method: details.method,
+        note: trimmedNote,
         orderId: order.id,
         paidAt,
         reference: details.reference ?? '',
@@ -459,6 +502,7 @@ export async function confirmPendingOrderPaymentWithDetails(
       },
       update: {
         method: details.method,
+        note: trimmedNote,
         paidAt,
         reference: details.reference ?? '',
         screenshotUrl: details.screenshotUrl,
@@ -831,10 +875,19 @@ export async function markOrderDelivered(
     throw new OrderDomainError('DELIVERY_PROOF_REQUIRED', 'La foto de entrega es obligatoria', 400);
   }
 
-  const where: PrismaType.OrderWhereInput =
-    actorType === 'admin' || actorType === 'superAdmin'
-      ? { id: orderId, status: 'delivering' }
-      : { deliveryUserId: userId, id: orderId, status: 'delivering' };
+  if (actorType !== 'deliveryDriver') {
+    throw new OrderDomainError(
+      'FORBIDDEN',
+      'Solo el repartidor asignado puede marcar la orden como entregada',
+      403,
+    );
+  }
+
+  const where: PrismaType.OrderWhereInput = {
+    deliveryUserId: userId,
+    id: orderId,
+    status: 'delivering',
+  };
 
   return client.$transaction(async (tx) => {
     const result = await tx.order.updateMany({
@@ -893,16 +946,35 @@ export async function startOrderDelivering(
   orderId: string,
   actorUserId: string,
 ): Promise<OrderWithLines> {
-  const isAdmin = actorType === 'admin' || actorType === 'superAdmin';
-  const where: PrismaType.OrderWhereInput = isAdmin
-    ? { id: orderId, status: 'assignedToDeliveryDriver' }
-    : {
-        deliveryUserId: actorUserId,
-        id: orderId,
-        status: 'assignedToDeliveryDriver',
-      };
+  if (actorType !== 'deliveryDriver') {
+    throw new OrderDomainError(
+      'FORBIDDEN',
+      'Solo el repartidor asignado puede iniciar el reparto desde la app',
+      403,
+    );
+  }
 
   return client.$transaction(async (tx) => {
+    const activeCount = await tx.order.count({
+      where: {
+        deliveryUserId: actorUserId,
+        status: 'delivering',
+      },
+    });
+    if (activeCount > 0) {
+      throw new OrderDomainError(
+        'ACTIVE_DELIVERY_EXISTS',
+        'Ya tienes un reparto activo. Finalízalo antes de iniciar otro',
+        409,
+      );
+    }
+
+    const where: PrismaType.OrderWhereInput = {
+      deliveryUserId: actorUserId,
+      id: orderId,
+      status: 'assignedToDeliveryDriver',
+    };
+
     const result = await tx.order.updateMany({
       data: {
         status: 'delivering',
@@ -1004,6 +1076,17 @@ export async function verifyMobilePaymentP2c(
   orderId: string,
   details: MobilePaymentP2cDetails,
 ): Promise<{ changes: InventoryChange[]; order: OrderWithLines; voucher: string }> {
+  const methodConfig = await client.paymentMethodConfig.findUnique({
+    where: { method: 'mobilePayment' },
+  });
+  if (!methodConfig?.active) {
+    throw new OrderDomainError(
+      'PAYMENT_METHOD_INACTIVE',
+      'El método de pago no está disponible',
+      400,
+    );
+  }
+
   const reconciledPreview = await client.$transaction(async (tx) => {
     let order = await tx.order.findUnique({ where: { id: orderId } });
     if (!order || order.userId !== userId) {
@@ -1143,10 +1226,12 @@ export async function verifyMobilePaymentP2c(
     }
 
     const paidAt = new Date();
-    const delivery = await resolveDeliverySnapshot(tx, userId, details.deliveryAddress);
+    const delivery = await resolveDeliverySnapshot(tx, userId, order.storeId);
     const updated = await tx.order.updateMany({
       data: {
         deliveryAddress: delivery.deliveryAddress,
+        deliveryLatitude: delivery.deliveryLatitude,
+        deliveryLongitude: delivery.deliveryLongitude,
         deliveryPhone: delivery.deliveryPhone,
         exchangeRate: new Prisma.Decimal(usdRate),
         paidAt,
@@ -1289,7 +1374,9 @@ async function applyStoreIdToPendingOrder(
   const storeId = requestedStoreId?.trim();
   if (!storeId) return order;
 
-  const store = await tx.store.findUnique({ where: { id: storeId } });
+  const store = await tx.store.findFirst({
+    where: { active: true, id: storeId },
+  });
   if (!store) {
     throw new OrderDomainError('STORE_NOT_FOUND', 'Tienda no encontrada', 400);
   }
@@ -1316,6 +1403,9 @@ const CANCELLABLE_STATUSES: OrderStatus[] = [
   'paymentPendingConfirmation',
   'paymentConfirmed',
   'preparing',
+  'readyForDelivery',
+  'assignedToDeliveryDriver',
+  'delivering',
 ];
 
 export function applyImageUrlsToOrderLines(
@@ -1487,17 +1577,82 @@ async function reconcileLines(
 }
 
 async function resolveDeliverySnapshot(
-  tx: Pick<Prisma.TransactionClient, 'user'>,
+  tx: Pick<Prisma.TransactionClient, 'store' | 'user'>,
   userId: string,
-  deliveryAddress?: null | string,
-): Promise<{ deliveryAddress: null | string; deliveryPhone: null | string }> {
+  storeId: null | string,
+  _deliveryAddress?: null | string,
+  _deliveryLatitude?: null | number,
+  _deliveryLongitude?: null | number,
+): Promise<{
+  deliveryAddress: null | string;
+  deliveryLatitude: null | Prisma.Decimal;
+  deliveryLongitude: null | Prisma.Decimal;
+  deliveryPhone: null | string;
+}> {
   const user = await tx.user.findUnique({
-    select: { address: true, phone: true },
+    select: {
+      address: true,
+      addressCity: true,
+      addressLatitude: true,
+      addressLongitude: true,
+      phone: true,
+    },
     where: { id: userId },
   });
-  const fromRequest = deliveryAddress?.trim();
+
+  const profileLat =
+    user?.addressLatitude === null || user?.addressLatitude === undefined
+      ? null
+      : Number(user.addressLatitude.toString());
+  const profileLng =
+    user?.addressLongitude === null || user?.addressLongitude === undefined
+      ? null
+      : Number(user.addressLongitude.toString());
+  const profileCity = user?.addressCity?.trim() || null;
+  const profileAddress = user?.address?.trim() || null;
+
+  if (
+    profileLat === null ||
+    profileLng === null ||
+    !profileCity ||
+    !profileAddress ||
+    !Number.isFinite(profileLat) ||
+    !Number.isFinite(profileLng)
+  ) {
+    throw new OrderDomainError(
+      'ADDRESS_REQUIRED',
+      'Configura tu dirección en el mapa antes de pagar',
+      409,
+    );
+  }
+
+  if (storeId) {
+    const store = await tx.store.findUnique({
+      select: { city: true, name: true },
+      where: { id: storeId },
+    });
+    const storeCity = store?.city?.trim() || null;
+    if (!storeCity) {
+      throw new OrderDomainError(
+        'STORE_CITY_MISSING',
+        'La tienda no tiene ciudad configurada',
+        500,
+      );
+    }
+    if (profileCity !== storeCity) {
+      throw new OrderDomainError(
+        'ADDRESS_CITY_MISMATCH',
+        `Elige una nueva dirección en la misma ciudad de ${store?.name ?? 'la tienda'}`,
+        409,
+        { storeCity, storeName: store?.name ?? null, userCity: profileCity },
+      );
+    }
+  }
+
   return {
-    deliveryAddress: fromRequest || user?.address?.trim() || null,
+    deliveryAddress: profileAddress,
+    deliveryLatitude: new Prisma.Decimal(profileLat.toFixed(7)),
+    deliveryLongitude: new Prisma.Decimal(profileLng.toFixed(7)),
     deliveryPhone: user?.phone?.trim() || null,
   };
 }
@@ -1507,7 +1662,11 @@ async function resolveEffectiveStoreId(
   storeId: null | string,
 ): Promise<null | string> {
   if (storeId) return storeId;
-  const stores = await tx.store.findMany({ select: { id: true }, take: 2 });
+  const stores = await tx.store.findMany({
+    select: { id: true },
+    take: 2,
+    where: { active: true },
+  });
   return stores.length === 1 ? stores[0].id : null;
 }
 
@@ -1517,8 +1676,18 @@ function serializeOrder(order: Order): OrderWithLines {
       ? null
       : Number(order.exchangeRate.toString());
   const totalAmount = Number(order.totalAmount.toString());
+  const deliveryLatitude =
+    order.deliveryLatitude === null || order.deliveryLatitude === undefined
+      ? null
+      : Number(order.deliveryLatitude.toString());
+  const deliveryLongitude =
+    order.deliveryLongitude === null || order.deliveryLongitude === undefined
+      ? null
+      : Number(order.deliveryLongitude.toString());
   return {
     ...order,
+    deliveryLatitude,
+    deliveryLongitude,
     exchangeRate,
     products: toOrderLines(order.products as Prisma.JsonValue),
     totalAmount,
@@ -1543,6 +1712,7 @@ function serializePayment(payment: Payment): SerializedPayment {
     createdAt: payment.createdAt,
     id: payment.id,
     method: payment.method,
+    note: payment.note ?? null,
     paidAt: payment.paidAt,
     reference: payment.reference,
     screenshotUrl: payment.screenshotUrl,

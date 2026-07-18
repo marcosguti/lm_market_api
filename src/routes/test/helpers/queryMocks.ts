@@ -52,7 +52,16 @@ const blogArticleServiceMocks = vi.hoisted(() => ({
   updateBlogArticle: vi.fn(),
 }));
 
+const paymentMethodConfigServiceMocks = vi.hoisted(() => ({
+  getActivePaymentMethodConfigs: vi.fn(),
+  getAllPaymentMethodConfigs: vi.fn(),
+  getPaymentMethodConfig: vi.fn(),
+  updatePaymentMethodConfig: vi.fn(),
+}));
+
 const catalogQueryMocks = vi.hoisted(() => ({
+  assertStoreActive: vi.fn(),
+  assertStoreIdsActive: vi.fn(),
   findAllBrandsForCatalog: vi.fn(),
   findAllDepartmentsForCatalog: vi.fn(),
   findOrCreateBrand: vi.fn(),
@@ -131,6 +140,18 @@ vi.mock('../../../services/dealService.js', async (importOriginal) => {
   };
 });
 
+vi.mock('../../../services/paymentMethodConfigService.js', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../../services/paymentMethodConfigService.js')>();
+  return {
+    ...actual,
+    getActivePaymentMethodConfigs: paymentMethodConfigServiceMocks.getActivePaymentMethodConfigs,
+    getAllPaymentMethodConfigs: paymentMethodConfigServiceMocks.getAllPaymentMethodConfigs,
+    getPaymentMethodConfig: paymentMethodConfigServiceMocks.getPaymentMethodConfig,
+    updatePaymentMethodConfig: paymentMethodConfigServiceMocks.updatePaymentMethodConfig,
+  };
+});
+
 vi.mock('../../../queries/brandDepartment.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../queries/brandDepartment.js')>();
   return {
@@ -146,6 +167,8 @@ vi.mock('../../../queries/store.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../queries/store.js')>();
   return {
     ...actual,
+    assertStoreActive: catalogQueryMocks.assertStoreActive,
+    assertStoreIdsActive: catalogQueryMocks.assertStoreIdsActive,
     findStores: catalogQueryMocks.findStores,
   };
 });
@@ -314,6 +337,35 @@ export function resetQueryMocks(): void {
   catalogQueryMocks.findOrCreateBrand.mockResolvedValue({ id: 'b-new', name: 'NewBrand' });
   catalogQueryMocks.findOrCreateDepartment.mockResolvedValue({ id: 'd-new', name: 'Dept' });
   catalogQueryMocks.findStores.mockResolvedValue([]);
+  catalogQueryMocks.assertStoreActive.mockResolvedValue(undefined);
+  catalogQueryMocks.assertStoreIdsActive.mockResolvedValue(undefined);
+  paymentMethodConfigServiceMocks.getActivePaymentMethodConfigs.mockResolvedValue([]);
+  paymentMethodConfigServiceMocks.getAllPaymentMethodConfigs.mockResolvedValue([
+    {
+      active: true,
+      information: null,
+      method: 'cash',
+      noteEnabled: true,
+      placeholder: 'Toma una foto legible del billete',
+      updatedAt: new Date(),
+    },
+  ]);
+  paymentMethodConfigServiceMocks.getPaymentMethodConfig.mockResolvedValue({
+    active: true,
+    information: null,
+    method: 'cash',
+    noteEnabled: true,
+    placeholder: 'Toma una foto legible del billete',
+    updatedAt: new Date(),
+  });
+  paymentMethodConfigServiceMocks.updatePaymentMethodConfig.mockResolvedValue({
+    active: true,
+    information: null,
+    method: 'cash',
+    noteEnabled: true,
+    placeholder: 'Toma una foto legible del billete',
+    updatedAt: new Date(),
+  });
 }
 
 export function getUserQueryMocks() {

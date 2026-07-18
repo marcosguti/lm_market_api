@@ -2,6 +2,7 @@ import { Router } from 'express';
 
 import {
   assignDelivery,
+  getAdminOrderTracking,
   getKitchenOrders,
   getOrderStatusHistory,
   patchAdminOrderStatus,
@@ -18,6 +19,12 @@ router.get(
   requireAuth,
   requireRole(['admin', 'superAdmin']),
   getOrderStatusHistory,
+);
+router.get(
+  '/:id/tracking',
+  requireAuth,
+  requireRole(['admin', 'superAdmin']),
+  getAdminOrderTracking,
 );
 router.patch(
   '/:id/status',

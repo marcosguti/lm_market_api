@@ -57,6 +57,41 @@ export function createSocketServer(httpServer: HttpServer): Server {
     if (authUser.type === 'admin' || authUser.type === 'superAdmin') {
       socket.join(KITCHEN_ROOM);
     }
+
+    socket.on('tracking:subscribe', async (payload: unknown, ack?: (response: unknown) => void) => {
+      try {
+        const orderId =
+          payload && typeof payload === 'object' && 'orderId' in payload
+            ? String((payload as { orderId?: unknown }).orderId ?? '')
+            : '';
+        if (!orderId) {
+          ack?.({ error: 'orderId requerido', ok: false });
+          return;
+        }
+        const { assertCanSubscribeTracking } =
+          await import('../services/orderDeliveryTrackingService.js');
+        await assertCanSubscribeTracking(authUser.type, authUser.userId, orderId);
+        await socket.join(trackingRoom(orderId));
+        ack?.({ ok: true, orderId });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'No se pudo suscribir';
+        ack?.({ error: message, ok: false });
+      }
+    });
+
+    socket.on(
+      'tracking:unsubscribe',
+      async (payload: unknown, ack?: (response: unknown) => void) => {
+        const orderId =
+          payload && typeof payload === 'object' && 'orderId' in payload
+            ? String((payload as { orderId?: unknown }).orderId ?? '')
+            : '';
+        if (orderId) {
+          await socket.leave(trackingRoom(orderId));
+        }
+        ack?.({ ok: true });
+      },
+    );
   });
 
   return io;
@@ -86,8 +121,62 @@ export function emitOrderUpdated(userId: string, payload: unknown): void {
   requireIO().to(`user:${userId}`).emit('order:updated', payload);
 }
 
+export function emitTrackingEnded(
+  payload: { orderId: string; reason: 'cancelled' | 'delivered' },
+  targets: { adminRoom?: boolean; userIds: string[] },
+): void {
+  const server = requireIO();
+  for (const userId of targets.userIds) {
+    server.to(`user:${userId}`).emit('tracking:ended', payload);
+  }
+  if (targets.adminRoom) {
+    server.to(KITCHEN_ROOM).emit('tracking:ended', payload);
+  }
+  server.to(trackingRoom(payload.orderId)).emit('tracking:ended', payload);
+}
+
+export function emitTrackingLocation(
+  clientUserId: string,
+  payload: {
+    location: {
+      accuracyMeters: null | number;
+      headingDegrees: null | number;
+      latitude: number;
+      longitude: number;
+      serverReceivedAt: string;
+      speedMps: null | number;
+    };
+    orderId: string;
+  },
+): void {
+  const server = requireIO();
+  server.to(`user:${clientUserId}`).emit('tracking:location', payload);
+  server.to(KITCHEN_ROOM).emit('tracking:location', payload);
+  server.to(trackingRoom(payload.orderId)).emit('tracking:location', payload);
+}
+
+export function emitTrackingRoute(
+  clientUserId: string,
+  payload: {
+    distanceMeters: null | number;
+    etaSeconds: null | number;
+    orderId: string;
+    routeCalculatedAt: null | string;
+    routeGeometry: { coordinates: [number, number][]; type: 'LineString' } | null;
+  },
+): void {
+  const server = requireIO();
+  server.to(`user:${clientUserId}`).emit('tracking:route', payload);
+  server.to(KITCHEN_ROOM).emit('tracking:route', payload);
+  server.to(trackingRoom(payload.orderId)).emit('tracking:route', payload);
+}
+
 export function emitUserNotification(userId: string, payload: unknown): void {
   requireIO().to(`user:${userId}`).emit('notification:new', payload);
+}
+
+export function trackingRoom(orderId: string): string {
+  return `tracking:${orderId}`;
 }
 
 function requireIO(): Server {

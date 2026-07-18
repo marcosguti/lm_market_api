@@ -1,0 +1,7 @@
+-- AlterTable User
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "addressCity" VARCHAR(32);
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "addressLatitude" DECIMAL(10,7);
+ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "addressLongitude" DECIMAL(10,7);
+
+-- AlterTable Store
+ALTER TABLE "Store" ADD COLUMN IF NOT EXISTS "city" VARCHAR(32);

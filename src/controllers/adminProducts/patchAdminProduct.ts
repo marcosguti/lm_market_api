@@ -12,6 +12,7 @@ import {
   normalizeCatalogName,
 } from '../../queries/brandDepartment.js';
 import { findProductById, updateProductById, upsertProductStores } from '../../queries/product.js';
+import { StoreNotFoundError } from '../../queries/store.js';
 import { patchSchema } from './schemas.js';
 import { serializeAdminProduct } from './serializeAdminProduct.js';
 
@@ -78,6 +79,10 @@ export async function patchAdminProduct(req: AuthRequest, res: Response): Promis
     const refreshed = await findProductById(id);
     res.json({ product: serializeAdminProduct(refreshed!) });
   } catch (e) {
+    if (e instanceof StoreNotFoundError) {
+      res.status(e.statusCode).json({ code: e.code, error: e.message });
+      return;
+    }
     console.error('[admin-products] stack:', (e as Error).stack);
     res.status(500).json({ error: 'Error al actualizar el producto' });
   }

@@ -203,6 +203,170 @@ const migrations: MigrationFunction[] = [
     },
     version: 6,
   },
+  {
+    name: 'Add Store.active',
+    up: async (tx: TransactionClient) => {
+      await tx.$executeRaw`
+        ALTER TABLE "Store"
+        ADD COLUMN IF NOT EXISTS "active" BOOLEAN NOT NULL DEFAULT true
+      `;
+      await tx.$executeRaw`
+        CREATE INDEX IF NOT EXISTS "Store_active_idx" ON "Store"("active")
+      `;
+      console.log('Store.active column and index ensured');
+    },
+    version: 7,
+  },
+  {
+    name: 'Add Order delivery coordinates and OrderDeliveryTracking',
+    up: async (tx: TransactionClient) => {
+      await tx.$executeRaw`
+        ALTER TABLE "Order"
+        ADD COLUMN IF NOT EXISTS "deliveryLatitude" DECIMAL(10,7)
+      `;
+      await tx.$executeRaw`
+        ALTER TABLE "Order"
+        ADD COLUMN IF NOT EXISTS "deliveryLongitude" DECIMAL(10,7)
+      `;
+      await tx.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "OrderDeliveryTracking" (
+          "orderId" TEXT NOT NULL,
+          "latitude" DECIMAL(10,7) NOT NULL,
+          "longitude" DECIMAL(10,7) NOT NULL,
+          "accuracyMeters" DOUBLE PRECISION,
+          "headingDegrees" DOUBLE PRECISION,
+          "speedMps" DOUBLE PRECISION,
+          "deviceRecordedAt" TIMESTAMP(3),
+          "serverReceivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "trackingSessionId" TEXT,
+          "deviceId" TEXT,
+          "routeGeometry" JSONB,
+          "distanceMeters" DOUBLE PRECISION,
+          "etaSeconds" INTEGER,
+          "routeCalculatedAt" TIMESTAMP(3),
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          CONSTRAINT "OrderDeliveryTracking_pkey" PRIMARY KEY ("orderId")
+        )
+      `;
+      await tx.$executeRaw`
+        CREATE INDEX IF NOT EXISTS "OrderDeliveryTracking_serverReceivedAt_idx"
+        ON "OrderDeliveryTracking"("serverReceivedAt")
+      `;
+      await tx.$executeRaw`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'OrderDeliveryTracking_orderId_fkey'
+          ) THEN
+            ALTER TABLE "OrderDeliveryTracking"
+              ADD CONSTRAINT "OrderDeliveryTracking_orderId_fkey"
+              FOREIGN KEY ("orderId") REFERENCES "Order"("id")
+              ON DELETE CASCADE ON UPDATE CASCADE;
+          END IF;
+        END $$;
+      `;
+      await tx.$executeRaw`
+        DELETE FROM "OrderDeliveryTracking" t
+        USING "Order" o
+        WHERE t."orderId" = o."id" AND o."status" <> 'delivering'
+      `;
+      console.log('Order delivery coordinates and OrderDeliveryTracking ensured');
+    },
+    version: 8,
+  },
+  {
+    name: 'Add Store latitude/longitude and backfill branch coordinates',
+    up: async (tx: TransactionClient) => {
+      await tx.$executeRaw`
+        ALTER TABLE "Store"
+        ADD COLUMN IF NOT EXISTS "latitude" DECIMAL(10,7)
+      `;
+      await tx.$executeRaw`
+        ALTER TABLE "Store"
+        ADD COLUMN IF NOT EXISTS "longitude" DECIMAL(10,7)
+      `;
+      await tx.$executeRaw`
+        UPDATE "Store"
+        SET "latitude" = 8.598136, "longitude" = -71.150426
+        WHERE "externalBranchCode" = '1'
+      `;
+      await tx.$executeRaw`
+        UPDATE "Store"
+        SET "latitude" = 8.556639, "longitude" = -71.198714
+        WHERE "externalBranchCode" = '2'
+      `;
+      await tx.$executeRaw`
+        UPDATE "Store"
+        SET "latitude" = 8.327331, "longitude" = -71.757007
+        WHERE "externalBranchCode" = '3'
+      `;
+      console.log('Store latitude/longitude ensured and backfilled');
+    },
+    version: 9,
+  },
+  {
+    name: 'Add User address coords/city and Store.city',
+    up: async (tx: TransactionClient) => {
+      await tx.$executeRaw`
+        ALTER TABLE "User"
+        ADD COLUMN IF NOT EXISTS "addressCity" VARCHAR(32)
+      `;
+      await tx.$executeRaw`
+        ALTER TABLE "User"
+        ADD COLUMN IF NOT EXISTS "addressLatitude" DECIMAL(10,7)
+      `;
+      await tx.$executeRaw`
+        ALTER TABLE "User"
+        ADD COLUMN IF NOT EXISTS "addressLongitude" DECIMAL(10,7)
+      `;
+      await tx.$executeRaw`
+        ALTER TABLE "Store"
+        ADD COLUMN IF NOT EXISTS "city" VARCHAR(32)
+      `;
+      await tx.$executeRaw`
+        UPDATE "Store" SET "city" = 'merida'
+        WHERE "externalBranchCode" IN ('1', '2')
+      `;
+      await tx.$executeRaw`
+        UPDATE "Store" SET "city" = 'tovar'
+        WHERE "externalBranchCode" = '3'
+      `;
+      console.log('User address coords/city and Store.city ensured');
+    },
+    version: 10,
+  },
+  {
+    name: 'Add PaymentMethodConfig and Payment.note',
+    up: async (tx: TransactionClient) => {
+      await tx.$executeRaw`
+        ALTER TABLE "Payment"
+        ADD COLUMN IF NOT EXISTS "note" VARCHAR(100)
+      `;
+      await tx.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "PaymentMethodConfig" (
+          "method" "PaymentMethod" NOT NULL,
+          "active" BOOLEAN NOT NULL DEFAULT true,
+          "information" TEXT,
+          "placeholder" VARCHAR(200),
+          "noteEnabled" BOOLEAN NOT NULL DEFAULT false,
+          "updatedAt" TIMESTAMP(3) NOT NULL,
+          CONSTRAINT "PaymentMethodConfig_pkey" PRIMARY KEY ("method")
+        )
+      `;
+      await tx.$executeRaw`
+        INSERT INTO "PaymentMethodConfig" ("method", "active", "information", "placeholder", "noteEnabled", "updatedAt")
+        VALUES
+          ('cash'::"PaymentMethod", true, NULL, 'Toma una foto legible del billete', true, CURRENT_TIMESTAMP),
+          ('zelle'::"PaymentMethod", true, NULL, NULL, true, CURRENT_TIMESTAMP),
+          ('mobilePayment'::"PaymentMethod", true, NULL, NULL, false, CURRENT_TIMESTAMP),
+          ('binance'::"PaymentMethod", true, NULL, NULL, true, CURRENT_TIMESTAMP)
+        ON CONFLICT ("method") DO NOTHING
+      `;
+      console.log('PaymentMethodConfig and Payment.note ensured');
+    },
+    version: 11,
+  },
 ];
 
 const runMigrations = async () => {
