@@ -16,10 +16,10 @@ Al **asignar** o **cancelar/desasignar** un reparto, lo mismo para el **delivery
 
 ## Variables `.env`
 
-| Variable | Uso |
-|----------|-----|
-| `FIREBASE_SERVICE_ACCOUNT_JSON` | JSON completo del service account (una línea). Preferido en deploy. |
-| `GOOGLE_APPLICATION_CREDENTIALS` | Ruta absoluta al `.json` del service account. Preferido en local. |
+| Variable                         | Uso                                                                 |
+| -------------------------------- | ------------------------------------------------------------------- |
+| `FIREBASE_SERVICE_ACCOUNT_JSON`  | JSON completo del service account (una línea). Preferido en deploy. |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Ruta absoluta al `.json` del service account. Preferido en local.   |
 
 Solo necesitas **una**. Generar en Firebase → Project settings → Service accounts → Generate new private key.
 

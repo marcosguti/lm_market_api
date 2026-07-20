@@ -24,6 +24,23 @@ vi.mock('../../../prisma.js', () => ({
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       upsert: vi.fn().mockResolvedValue({ id: 'pd1' }),
     },
+    syncJobStatus: {
+      findMany: vi.fn().mockResolvedValue([]),
+      findUnique: vi.fn().mockResolvedValue(null),
+      update: vi.fn().mockResolvedValue({}),
+      upsert: vi.fn().mockResolvedValue({
+        details: null,
+        id: 'sjs1',
+        job: 'external_products',
+        lastAlertedAt: null,
+        lastError: null,
+        lastFinishedAt: null,
+        lastStartedAt: new Date(),
+        lastSucceededAt: null,
+        status: 'running',
+        updatedAt: new Date(),
+      }),
+    },
     token: {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
     },

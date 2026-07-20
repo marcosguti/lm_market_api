@@ -2,10 +2,11 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
-import { isDeliveryCitySlug, isInsideDeliveryCityBounds } from '../../config/delivery.js';
+import { isDeliveryCitySlug, isInsideDeliveryCityPolygon } from '../../config/delivery.js';
 import { MapboxGeocodingError, reverseGeocodeDeliveryPin } from '../../libs/mapboxGeocoding.js';
 import { updateUser } from '../../queries/user.js';
 import { putDeliveryAddressSchema } from './schemas.js';
+import { serializeAuthUser } from './serializeAuthUser.js';
 
 export async function putDeliveryAddress(req: AuthRequest, res: Response): Promise<void> {
   if (!req.userId) {
@@ -22,7 +23,7 @@ export async function putDeliveryAddress(req: AuthRequest, res: Response): Promi
   const { expectedCity, latitude, longitude } = validation.value;
 
   if (expectedCity && isDeliveryCitySlug(expectedCity)) {
-    if (!isInsideDeliveryCityBounds(expectedCity, latitude, longitude)) {
+    if (!isInsideDeliveryCityPolygon(expectedCity, latitude, longitude)) {
       res.status(422).json({
         code: 'ADDRESS_OUT_OF_BOUNDS',
         error: 'La ubicación está fuera del área de entrega de la ciudad seleccionada',
@@ -40,7 +41,7 @@ export async function putDeliveryAddress(req: AuthRequest, res: Response): Promi
       });
       return;
     }
-    if (!isInsideDeliveryCityBounds(geocoded.city, latitude, longitude)) {
+    if (!isInsideDeliveryCityPolygon(geocoded.city, latitude, longitude)) {
       res.status(422).json({
         code: 'ADDRESS_OUT_OF_BOUNDS',
         error: 'La ubicación está fuera del área de entrega de esa ciudad',
@@ -53,8 +54,7 @@ export async function putDeliveryAddress(req: AuthRequest, res: Response): Promi
       addressLatitude: latitude,
       addressLongitude: longitude,
     });
-    const { password: _p, ...userWithoutPassword } = user;
-    res.json({ user: userWithoutPassword });
+    res.json({ user: serializeAuthUser(user) });
   } catch (error) {
     if (error instanceof MapboxGeocodingError) {
       res.status(error.statusCode).json({

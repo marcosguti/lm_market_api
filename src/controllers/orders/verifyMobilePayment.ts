@@ -41,6 +41,7 @@ export async function verifyMobilePayment(req: AuthRequest, res: Response): Prom
   const {
     amount,
     bankCode,
+    customerNotes,
     deliveryAddress,
     deliveryLatitude,
     deliveryLongitude,
@@ -68,6 +69,7 @@ export async function verifyMobilePayment(req: AuthRequest, res: Response): Prom
       amount,
       clientBankCode: bankCode,
       clientPhone: phone,
+      customerNotes: customerNotes ?? null,
       deliveryAddress: deliveryAddress ?? null,
       deliveryLatitude,
       deliveryLongitude,

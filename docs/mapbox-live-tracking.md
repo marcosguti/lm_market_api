@@ -11,11 +11,11 @@ Esta guía aplica a `lm_market_api`, `lm_market_web` y `lm_market_mobile`.
 
 Genera tokens distintos:
 
-| Token | Uso | Dónde |
-| --- | --- | --- |
-| Público `pk...` Flutter | Renderizar mapas en la app | `--dart-define=MAPBOX_ACCESS_TOKEN` |
-| Público `pk...` Web | Renderizar mapas en Vite | `VITE_MAPBOX_ACCESS_TOKEN` |
-| Token servidor | Directions/ETA | `MAPBOX_ACCESS_TOKEN` en API `.env` |
+| Token                    | Uso                              | Dónde                                          |
+| ------------------------ | -------------------------------- | ---------------------------------------------- |
+| Público `pk...` Flutter  | Renderizar mapas en la app       | `--dart-define=MAPBOX_ACCESS_TOKEN`            |
+| Público `pk...` Web      | Renderizar mapas en Vite         | `VITE_MAPBOX_ACCESS_TOKEN`                     |
+| Token servidor           | Directions/ETA                   | `MAPBOX_ACCESS_TOKEN` en API `.env`            |
 | Secreto `DOWNLOADS:READ` | Descargar SDK nativo Android/iOS | Gradle / `.netrc` / secretos CI (nunca en Git) |
 
 Restringe los tokens públicos por URL/package/bundle id.

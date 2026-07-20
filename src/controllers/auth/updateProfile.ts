@@ -4,6 +4,7 @@ import type { AuthRequest } from '../../middlewares/auth.js';
 
 import { findUserByPhone, updateUser } from '../../queries/user.js';
 import { updateProfileSchema } from './schemas.js';
+import { serializeAuthUser } from './serializeAuthUser.js';
 
 export async function updateProfile(req: AuthRequest, res: Response): Promise<void> {
   if (!req.userId) {
@@ -31,6 +32,5 @@ export async function updateProfile(req: AuthRequest, res: Response): Promise<vo
     lastName: body.lastName,
     phone: body.phone,
   });
-  const { password: _p, ...userWithoutPassword } = user;
-  res.json({ user: userWithoutPassword });
+  res.json({ user: serializeAuthUser(user) });
 }

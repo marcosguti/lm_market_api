@@ -127,7 +127,7 @@ describe('confirmOrderPayment controller', () => {
 
   it('confirms cash payment with screenshot to paymentPendingConfirmation', async () => {
     const req = {
-      body: { method: 'cash' },
+      body: { customerNotes: 'Portón azul', method: 'cash' },
       file: {
         buffer: Buffer.from('img'),
         mimetype: 'image/jpeg',
@@ -141,6 +141,7 @@ describe('confirmOrderPayment controller', () => {
     expect(res.statusCode).toBe(200);
     expect(uploadPaymentScreenshot).toHaveBeenCalled();
     expect(confirmPendingOrderPaymentWithDetails).toHaveBeenCalledWith('client-1', 'o1', {
+      customerNotes: 'Portón azul',
       deliveryAddress: null,
       deliveryLatitude: undefined,
       deliveryLongitude: undefined,

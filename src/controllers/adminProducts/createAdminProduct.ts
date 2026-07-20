@@ -17,11 +17,13 @@ import {
   upsertProductStores,
 } from '../../queries/product.js';
 import { assertStoreIdsActive, findStores, StoreNotFoundError } from '../../queries/store.js';
-import { createSchema } from './schemas.js';
+import { createSchema, normalizeAdminProductMultipartBody } from './schemas.js';
 import { serializeAdminProduct } from './serializeAdminProduct.js';
 
 export async function createAdminProduct(req: AuthRequest, res: Response): Promise<void> {
-  const validation = createSchema.validate(req.body);
+  const validation = createSchema.validate(
+    normalizeAdminProductMultipartBody(req.body as Record<string, unknown>),
+  );
   if (validation.error) {
     res.status(400).json({ error: validation.error.message });
     return;

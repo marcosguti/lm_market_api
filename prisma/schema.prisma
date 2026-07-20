@@ -188,6 +188,22 @@ model ExchangeRate {
   @@index([pair])
 }
 
+model SyncJobStatus {
+  id              String    @id @default(uuid())
+  job             String    @unique @db.VarChar(64)
+  status          String    @db.VarChar(32)
+  lastStartedAt   DateTime?
+  lastFinishedAt  DateTime?
+  lastSucceededAt DateTime?
+  lastError       String?
+  details         Json?
+  lastAlertedAt   DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([status])
+}
+
 model Order {
   id                   String         @id @default(uuid())
   userId               String

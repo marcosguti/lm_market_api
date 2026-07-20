@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import type { Response } from 'express';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -85,7 +86,50 @@ describe('putDeliveryAddress', () => {
       addressLatitude: 8.59,
       addressLongitude: -71.15,
     });
-    expect((res.body as { user: { password?: string } }).user.password).toBeUndefined();
+    const body = res.body as {
+      user: { addressLatitude: unknown; addressLongitude: unknown; password?: string };
+    };
+    expect(body.user.password).toBeUndefined();
+    expect(typeof body.user.addressLatitude).toBe('number');
+    expect(typeof body.user.addressLongitude).toBe('number');
+    expect(body.user.addressLatitude).toBe(8.59);
+    expect(body.user.addressLongitude).toBe(-71.15);
+  });
+
+  it('serializes Decimal coords as numbers in the response', async () => {
+    reverseGeocodeDeliveryPin.mockResolvedValue({
+      address: 'Av. Las Americas, Mérida',
+      city: 'merida',
+    });
+    updateUser.mockResolvedValue({
+      address: 'Av. Las Americas, Mérida',
+      addressCity: 'merida',
+      addressLatitude: new Prisma.Decimal('8.5981360'),
+      addressLongitude: new Prisma.Decimal('-71.1504260'),
+      email: 'a@test.com',
+      firstName: 'Ana',
+      id: 'u1',
+      lastName: 'Client',
+      password: 'hash',
+    });
+
+    const res = mockRes();
+    await putDeliveryAddress(
+      {
+        body: { expectedCity: 'merida', latitude: 8.598136, longitude: -71.150426 },
+        userId: 'u1',
+      } as AuthRequest,
+      res,
+    );
+
+    expect(res.statusCode).toBe(200);
+    const body = res.body as {
+      user: { addressLatitude: unknown; addressLongitude: unknown };
+    };
+    expect(typeof body.user.addressLatitude).toBe('number');
+    expect(typeof body.user.addressLongitude).toBe('number');
+    expect(body.user.addressLatitude).toBeCloseTo(8.598136);
+    expect(body.user.addressLongitude).toBeCloseTo(-71.150426);
   });
 
   it('rejects when pin is outside expectedCity bounds before geocode', async () => {

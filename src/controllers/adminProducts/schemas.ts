@@ -33,3 +33,34 @@ export const patchSchema = Joi.object({
   description: Joi.string().trim().allow('').optional().empty(''),
   stores: Joi.array().items(storeEntrySchema).optional(),
 }).min(1);
+
+/**
+ * Multipart FormData sends nested JSON as strings. Parse `stores` (and coerce
+ * `active`) before Joi so create/patch accept the web client payload.
+ */
+export function normalizeAdminProductMultipartBody(
+  body: Record<string, unknown>,
+): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...body };
+
+  if (typeof next.stores === 'string') {
+    const trimmed = next.stores.trim();
+    if (trimmed === '') {
+      delete next.stores;
+    } else {
+      try {
+        next.stores = JSON.parse(trimmed) as unknown;
+      } catch {
+        // Leave as string; Joi will reject with a clear array error.
+      }
+    }
+  }
+
+  if (typeof next.active === 'string') {
+    const lower = next.active.toLowerCase();
+    if (lower === 'true') next.active = true;
+    else if (lower === 'false') next.active = false;
+  }
+
+  return next;
+}

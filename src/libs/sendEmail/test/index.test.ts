@@ -22,6 +22,7 @@ import {
   sendContactEmail,
   sendEmailVerificationCode,
   sendLoginCode,
+  sendOpsAlertEmail,
   sendPasswordResetEmail,
 } from '../index.js';
 
@@ -214,6 +215,47 @@ describe('sendEmail transport', () => {
           subject: 'Ayuda',
         }),
       ).rejects.toThrow(/SUPPORT_EMAIL/);
+    });
+  });
+
+  describe('sendOpsAlertEmail', () => {
+    it('sends to OPS_ALERT_EMAIL when set', async () => {
+      vi.stubEnv('OPS_ALERT_EMAIL', 'ops@test.com');
+      await sendOpsAlertEmail({
+        error: 'page failed',
+        job: 'external_products',
+        status: 'incomplete',
+      });
+
+      expect(mailjetRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          Messages: [
+            expect.objectContaining({
+              Subject: '[Ops · Sync] external_products: incomplete',
+              To: [{ Email: 'ops@test.com' }],
+            }),
+          ],
+        }),
+      );
+    });
+
+    it('falls back to SUPPORT_EMAIL when OPS_ALERT_EMAIL is empty', async () => {
+      vi.stubEnv('OPS_ALERT_EMAIL', '');
+      await sendOpsAlertEmail({
+        error: 'all sources failed',
+        job: 'bcv_rate',
+        status: 'failed',
+      });
+
+      expect(mailjetRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          Messages: [
+            expect.objectContaining({
+              To: [{ Email: 'Soporte@lmmarketca.com' }],
+            }),
+          ],
+        }),
+      );
     });
   });
 });

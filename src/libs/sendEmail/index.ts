@@ -4,6 +4,7 @@ import { getLogoInlineAttachment } from './logo.js';
 import { getContactMessageTemplate } from './templates/contactMessage.js';
 import { getEmailVerificationTemplate } from './templates/emailVerification.js';
 import { getLoginCodeTemplate } from './templates/loginCode.js';
+import { getOpsAlertTemplate } from './templates/opsAlert.js';
 import { getOrderCancelledTemplate } from './templates/orderCancelled.js';
 import { getPasswordResetTemplate } from './templates/passwordReset.js';
 
@@ -113,6 +114,12 @@ const assertSupportEmail = (): string => {
     throw new Error('[mailjet] Missing SUPPORT_EMAIL in .env');
   }
   return supportEmail;
+};
+
+const assertOpsAlertEmail = (): string => {
+  const opsEmail = process.env.OPS_ALERT_EMAIL?.trim();
+  if (opsEmail) return opsEmail;
+  return assertSupportEmail();
 };
 
 const AREA_SUBJECT_LABELS: Record<string, string> = {
@@ -409,6 +416,63 @@ export const sendContactEmail = async ({
     if (status !== 'success') {
       throw new Error(
         `Mailjet status: ${status ?? 'unknown'} - ${JSON.stringify(resultMessage?.Errors ?? response.body)}`,
+      );
+    }
+  } catch (err) {
+    logMailjetSendFailure(err);
+    throw err;
+  }
+};
+
+export const sendOpsAlertEmail = async ({
+  detailsText,
+  error,
+  job,
+  status,
+}: {
+  detailsText?: null | string;
+  error?: null | string;
+  job: string;
+  status: string;
+}): Promise<void> => {
+  const { fromEmail } = assertMailjetConfig();
+  const toEmail = assertOpsAlertEmail();
+  const mailjet = getMailjetClient();
+  const mailSubject = `[Ops · Sync] ${job}: ${status}`;
+
+  const payload = {
+    Messages: [
+      buildMailjetMessage({
+        htmlPart: getOpsAlertTemplate({ detailsText, error, job, status }),
+        subject: mailSubject,
+        toEmail,
+      }),
+    ],
+  };
+
+  // eslint-disable-next-line no-console
+  console.info('[mailjet] sending ops sync alert', {
+    from: fromEmail,
+    job,
+    status,
+    to: toEmail,
+  });
+
+  try {
+    const response = await mailjet.post('send', { version: 'v3.1' }).request(payload);
+    const resultMessage = response.body?.Messages?.[0];
+    const resultStatus = resultMessage?.Status;
+
+    // eslint-disable-next-line no-console
+    console.info('[mailjet] send response', {
+      errors: resultMessage?.Errors,
+      messageId: resultMessage?.MessageID,
+      status: resultStatus,
+    });
+
+    if (resultStatus !== 'success') {
+      throw new Error(
+        `Mailjet status: ${resultStatus ?? 'unknown'} - ${JSON.stringify(resultMessage?.Errors ?? response.body)}`,
       );
     }
   } catch (err) {

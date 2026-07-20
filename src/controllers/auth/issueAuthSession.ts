@@ -4,6 +4,7 @@ import { signAccessToken, signRefreshToken } from '../../libs/jwt.js';
 import { createHash } from '../../libs/passwordHashing.js';
 import { upsertLinkedDevice } from '../../queries/linkedDevice.js';
 import { createToken } from '../../queries/token.js';
+import { type AuthUserPublic, serializeAuthUser } from './serializeAuthUser.js';
 
 export async function issueAuthSession(
   user: User,
@@ -11,7 +12,7 @@ export async function issueAuthSession(
 ): Promise<{
   accessToken: string;
   refreshToken: string;
-  user: Omit<User, 'password'>;
+  user: AuthUserPublic;
 }> {
   const accessToken = signAccessToken({ userId: user.id });
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
@@ -25,10 +26,9 @@ export async function issueAuthSession(
     userId: user.id,
   });
 
-  const { password: _p, ...userWithoutPassword } = user;
   return {
     accessToken,
     refreshToken,
-    user: userWithoutPassword,
+    user: serializeAuthUser(user),
   };
 }

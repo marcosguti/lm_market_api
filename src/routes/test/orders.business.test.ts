@@ -59,6 +59,42 @@ describe('Orders business integration', () => {
       expect(res.status).toBe(200);
       expect(res.body.data).toEqual([]);
       expect(res.body.total).toBe(0);
+      expect(orderMocks.getUserOrderHistory).toHaveBeenCalledWith('client-1', 1, 20, {
+        createdFrom: undefined,
+        createdTo: undefined,
+        q: undefined,
+      });
+    });
+
+    it('forwards createdFrom, createdTo and q to service', async () => {
+      orderMocks.getUserOrderHistory.mockResolvedValue({
+        data: [],
+        page: 1,
+        pageSize: 10,
+        total: 0,
+        totalPages: 1,
+      });
+      const res = await request(app)
+        .get('/api/orders/history')
+        .query({
+          createdFrom: '2026-06-20',
+          createdTo: '2026-07-20',
+          page: 1,
+          pageSize: 10,
+          q: 'leche',
+        })
+        .set(authHeader());
+      expect(res.status).toBe(200);
+      expect(orderMocks.getUserOrderHistory).toHaveBeenCalledWith(
+        'client-1',
+        1,
+        10,
+        expect.objectContaining({
+          createdFrom: expect.any(Date),
+          createdTo: expect.any(Date),
+          q: 'leche',
+        }),
+      );
     });
   });
 

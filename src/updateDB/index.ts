@@ -482,6 +482,35 @@ const migrations: MigrationFunction[] = [
     },
     version: 16,
   },
+  {
+    name: 'Add SyncJobStatus table for sync health',
+    up: async (tx: TransactionClient) => {
+      await tx.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "SyncJobStatus" (
+          "id" TEXT NOT NULL,
+          "job" VARCHAR(64) NOT NULL,
+          "status" VARCHAR(32) NOT NULL,
+          "lastStartedAt" TIMESTAMP(3),
+          "lastFinishedAt" TIMESTAMP(3),
+          "lastSucceededAt" TIMESTAMP(3),
+          "lastError" TEXT,
+          "details" JSONB,
+          "lastAlertedAt" TIMESTAMP(3),
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" TIMESTAMP(3) NOT NULL,
+          CONSTRAINT "SyncJobStatus_pkey" PRIMARY KEY ("id")
+        )
+      `;
+      await tx.$executeRaw`
+        CREATE UNIQUE INDEX IF NOT EXISTS "SyncJobStatus_job_key" ON "SyncJobStatus"("job")
+      `;
+      await tx.$executeRaw`
+        CREATE INDEX IF NOT EXISTS "SyncJobStatus_status_idx" ON "SyncJobStatus"("status")
+      `;
+      console.log('SyncJobStatus table and indexes ensured');
+    },
+    version: 17,
+  },
 ];
 
 const runMigrations = async () => {

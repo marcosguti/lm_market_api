@@ -71,6 +71,7 @@ vi.mock('../megasoft/index.js', () => ({
 
 vi.mock('../../prisma.js', () => ({
   default: {
+    $queryRawUnsafe: vi.fn(),
     $transaction: vi.fn(async (cb: (tx: typeof txMocks) => unknown) => cb(txMocks)),
     exchangeRate: {
       findUnique: vi.fn().mockResolvedValue(null),
@@ -107,6 +108,7 @@ import {
   listDeliveryMine,
   listOrderStatusHistory,
   buildKitchenOrdersWhere,
+  escapeIlikePattern,
   listKitchenOrders,
   listNotificationsForInbox,
   listNotificationsForUser,
@@ -362,6 +364,7 @@ describe('orderService async flows', () => {
       expect(txMocks.order.updateMany).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
+            customerNotes: null,
             deliveryAddress: 'Calle Falsa 123',
             status: 'paymentPendingConfirmation',
           }),
@@ -372,6 +375,49 @@ describe('orderService async flows', () => {
           data: expect.objectContaining({
             fromStatus: 'pending',
             toStatus: 'paymentPendingConfirmation',
+          }),
+        }),
+      );
+    });
+
+    it('persists customerNotes on payment confirmation', async () => {
+      setupProductLine();
+      const pending = makeOrder({
+        products: [
+          {
+            code: 'SKU1',
+            description: null,
+            lineTotal: 10,
+            name: 'Product 1',
+            quantity: 1,
+            unitPrice: 10,
+          },
+        ],
+        totalAmount: new Prisma.Decimal(10),
+      });
+      const submitted = {
+        ...pending,
+        customerNotes: 'Portón azul, 3er piso',
+        paymentScreenshotUrl: 'https://cdn/proof.jpg',
+        status: 'paymentPendingConfirmation',
+      };
+      txMocks.order.findUnique.mockResolvedValueOnce(pending).mockResolvedValue(submitted);
+      txMocks.order.update.mockImplementation(async ({ data }) => ({
+        ...pending,
+        ...data,
+      }));
+
+      const result = await confirmPendingOrderPaymentWithDetails('u1', 'o1', {
+        customerNotes: 'Portón azul, 3er piso',
+        method: 'cash',
+        screenshotUrl: 'https://cdn/proof.jpg',
+      });
+
+      expect(result.order.customerNotes).toBe('Portón azul, 3er piso');
+      expect(txMocks.order.updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            customerNotes: 'Portón azul, 3er piso',
           }),
         }),
       );
@@ -651,6 +697,68 @@ describe('orderService async flows', () => {
 
       expect(result.total).toBe(1);
       expect(result.data[0].status).toBe('delivered');
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { status: { not: 'pending' }, userId: 'u1' },
+        }),
+      );
+    });
+
+    it('applies createdFrom/createdTo bounds to paymentDate', async () => {
+      const prisma = (await import('../../prisma.js')).default;
+      vi.mocked(prisma.order.findMany).mockResolvedValue([]);
+      vi.mocked(prisma.order.count).mockResolvedValue(0);
+      vi.mocked(prisma.product.findMany).mockResolvedValue([]);
+
+      await getUserOrderHistory('u1', 1, 10, {
+        createdFrom: new Date('2026-06-20T00:00:00.000Z'),
+        createdTo: new Date('2026-07-20T00:00:00.000Z'),
+      });
+
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          orderBy: [{ paymentDate: 'desc' }, { createdAt: 'desc' }],
+          where: expect.objectContaining({
+            paymentDate: {
+              gte: expect.any(Date),
+              lt: expect.any(Date),
+            },
+            status: { not: 'pending' },
+            userId: 'u1',
+          }),
+        }),
+      );
+    });
+
+    it('searches by q via raw SQL then loads orders by id', async () => {
+      const prisma = (await import('../../prisma.js')).default;
+      vi.mocked(prisma.$queryRawUnsafe)
+        .mockResolvedValueOnce([{ id: 'o-search' }])
+        .mockResolvedValueOnce([{ count: 1n }]);
+      vi.mocked(prisma.order.findMany).mockResolvedValue([
+        {
+          ...makeOrder({ id: 'o-search', status: 'delivered' }),
+          store: { name: 'Centro' },
+        },
+      ]);
+      vi.mocked(prisma.product.findMany).mockResolvedValue([]);
+
+      const result = await getUserOrderHistory('u1', 1, 10, { q: 'Arroz' });
+
+      expect(prisma.$queryRawUnsafe).toHaveBeenCalled();
+      expect(result.total).toBe(1);
+      expect(result.data[0].id).toBe('o-search');
+      expect(prisma.order.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: { in: ['o-search'] } },
+        }),
+      );
+    });
+  });
+
+  describe('escapeIlikePattern', () => {
+    it('escapes percent, underscore and backslash', () => {
+      expect(escapeIlikePattern('a%b_c\\d')).toBe('a\\%b\\_c\\\\d');
     });
   });
 
@@ -1185,13 +1293,16 @@ describe('orderService async flows', () => {
       });
     });
 
-    it('filters by createdAt range using Caracas half-open business days', () => {
+    it('filters by createdAt or paymentDate range using Caracas half-open business days', () => {
       const createdFrom = new Date('2026-07-01T00:00:00.000Z');
       const createdTo = new Date('2026-07-15T00:00:00.000Z');
       const where = buildKitchenOrdersWhere({ createdFrom, createdTo });
+      const dateRange = {
+        gte: new Date('2026-07-01T04:00:00.000Z'),
+        lt: new Date('2026-07-16T04:00:00.000Z'),
+      };
 
-      expect(where.createdAt?.gte?.toISOString()).toBe('2026-07-01T04:00:00.000Z');
-      expect(where.createdAt?.lt?.toISOString()).toBe('2026-07-16T04:00:00.000Z');
+      expect(where.OR).toEqual([{ createdAt: dateRange }, { paymentDate: dateRange }]);
       expect(where.status).toEqual({ notIn: ['pending'] });
     });
 
@@ -1199,8 +1310,9 @@ describe('orderService async flows', () => {
       const createdFrom = new Date('2026-07-15T00:00:00.000Z');
       const createdTo = new Date('2026-07-15T00:00:00.000Z');
       const where = buildKitchenOrdersWhere({ createdFrom, createdTo });
-      const start = where.createdAt?.gte as Date;
-      const endExclusive = where.createdAt?.lt as Date;
+      const createdAtRange = where.OR?.[0]?.createdAt as { gte?: Date; lt?: Date };
+      const start = createdAtRange.gte as Date;
+      const endExclusive = createdAtRange.lt as Date;
 
       const july15Afternoon = new Date('2026-07-15T18:38:07.000Z');
       const july14Afternoon = new Date('2026-07-14T18:40:17.000Z');
@@ -1208,6 +1320,9 @@ describe('orderService async flows', () => {
       expect(july15Afternoon.getTime()).toBeGreaterThanOrEqual(start.getTime());
       expect(july15Afternoon.getTime()).toBeLessThan(endExclusive.getTime());
       expect(july14Afternoon.getTime()).toBeLessThan(start.getTime());
+      expect(where.OR?.[1]).toEqual({
+        paymentDate: { gte: start, lt: endExclusive },
+      });
     });
 
     it('passes filters to prisma findMany', async () => {

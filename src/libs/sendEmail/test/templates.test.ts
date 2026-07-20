@@ -5,6 +5,7 @@ import { BRAND } from '../templates/common.js';
 import { getContactMessageTemplate } from '../templates/contactMessage.js';
 import { getEmailVerificationTemplate } from '../templates/emailVerification.js';
 import { getLoginCodeTemplate } from '../templates/loginCode.js';
+import { getOpsAlertTemplate } from '../templates/opsAlert.js';
 import { getOrderCancelledTemplate } from '../templates/orderCancelled.js';
 import { getPasswordResetTemplate } from '../templates/passwordReset.js';
 
@@ -90,6 +91,22 @@ describe('email templates', () => {
     expect(html).toContain('Ayuda con pedido');
     expect(html).toContain('Ana &lt;b&gt;X&lt;/b&gt;');
     expect(html).toContain('Hola &lt;script&gt;alert(1)&lt;/script&gt;');
+    expect(html).not.toContain('<script>');
+    expect(html).toContain(`src="cid:${LOGO_CONTENT_ID}"`);
+  });
+
+  it('ops alert template includes job status and escapes HTML', () => {
+    const html = getOpsAlertTemplate({
+      detailsText: '{ "a": 1 }',
+      error: 'Failed <script>',
+      job: 'external_products',
+      status: 'failed',
+    });
+
+    expect(html).toContain(BRAND.primary);
+    expect(html).toContain('external_products');
+    expect(html).toContain('failed');
+    expect(html).toContain('Failed &lt;script&gt;');
     expect(html).not.toContain('<script>');
     expect(html).toContain(`src="cid:${LOGO_CONTENT_ID}"`);
   });

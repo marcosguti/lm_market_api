@@ -34,6 +34,27 @@ export interface ExternalProductSearchResponse {
   totalPages: number;
 }
 
+export interface ExternalProductsSyncSummary {
+  incompleteStoreCount: number;
+  storeFailures: number;
+  stores: StoreSyncSummary[];
+  storesTotal: number;
+}
+
+export interface StoreSyncSummary {
+  branch: number;
+  complete: boolean;
+  deactivated: number;
+  error?: string;
+  failed: boolean;
+  pageErrors: number;
+  rowErrors: number;
+  sourceCodeCount: number;
+  storeId: string;
+  storeName: string;
+  upserted: number;
+}
+
 export function buildExternalProductsRequest(
   page: number,
   branch: number,
@@ -75,8 +96,9 @@ export function extractProductRows(body: unknown): ExternalProductRow[] {
   });
 }
 
-export async function syncExternalProducts(): Promise<void> {
+export async function syncExternalProducts(): Promise<ExternalProductsSyncSummary> {
   const stores = await findStores();
+  const summaries: StoreSyncSummary[] = [];
 
   // eslint-disable-next-line no-console -- sync diagnostics
   console.log(`[product-sync] === Starting sync for ${stores.length} stores ===`);
@@ -87,17 +109,37 @@ export async function syncExternalProducts(): Promise<void> {
     console.log(`[product-sync] Store: ${store.name} (branch=${branch}) - starting sync`);
 
     try {
-      await syncStore(store.id, store.name, branch);
+      const storeSummary = await syncStore(store.id, store.name, branch);
+      summaries.push(storeSummary);
       // eslint-disable-next-line no-console -- sync diagnostics
       console.log(`[product-sync] Store: ${store.name} (branch=${branch}) - sync completed`);
     } catch (error) {
       console.error(`[product-sync] Store: ${store.name} (branch=${branch}) - sync failed:`, error);
-      // Continue with next store
+      summaries.push({
+        branch,
+        complete: false,
+        deactivated: 0,
+        error: error instanceof Error ? error.message : String(error),
+        failed: true,
+        pageErrors: 0,
+        rowErrors: 0,
+        sourceCodeCount: 0,
+        storeId: store.id,
+        storeName: store.name,
+        upserted: 0,
+      });
     }
   }
 
   // eslint-disable-next-line no-console -- sync diagnostics
   console.log('[product-sync] === All stores synced ===');
+
+  return {
+    incompleteStoreCount: summaries.filter((s) => !s.complete && !s.failed).length,
+    storeFailures: summaries.filter((s) => s.failed).length,
+    stores: summaries,
+    storesTotal: stores.length,
+  };
 }
 
 async function deactivateStaleProducts(storeId: string, sourceCodes: Set<string>): Promise<number> {
@@ -250,7 +292,11 @@ async function syncProductRow(
   return 'synced';
 }
 
-async function syncStore(storeId: string, storeName: string, branch: number): Promise<void> {
+async function syncStore(
+  storeId: string,
+  storeName: string,
+  branch: number,
+): Promise<StoreSyncSummary> {
   const brandCache = await loadBrandNameToIdMap();
   const departmentCache = await loadDepartmentNameToIdMap();
 
@@ -388,4 +434,17 @@ async function syncStore(storeId: string, storeName: string, branch: number): Pr
   console.log(
     `[product-sync] Store: ${storeName} (branch=${branch}) - done: upserted=${upserted}, sinCódigo=${skippedWithoutCode}, conExistencia=${inStockCodes.size}, desactivados=${deactivated}, páginas=${lastProcessedPage}/${totalPages}, erroresPágina=${pageErrors}, erroresFila=${rowErrors}`,
   );
+
+  return {
+    branch,
+    complete: syncComplete,
+    deactivated,
+    failed: false,
+    pageErrors,
+    rowErrors,
+    sourceCodeCount: sourceCodes.size,
+    storeId,
+    storeName,
+    upserted,
+  };
 }

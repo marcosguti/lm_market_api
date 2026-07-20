@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import type { AuthRequest } from '../../middlewares/auth.js';
 
 import { findUserById } from '../../queries/user.js';
+import { serializeAuthUser } from './serializeAuthUser.js';
 
 export async function getMe(req: AuthRequest, res: Response): Promise<void> {
   if (!req.userId) {
@@ -14,6 +15,5 @@ export async function getMe(req: AuthRequest, res: Response): Promise<void> {
     res.status(404).json({ error: 'Usuario no encontrado' });
     return;
   }
-  const { password: _p, ...userWithoutPassword } = user;
-  res.json({ user: userWithoutPassword });
+  res.json({ user: serializeAuthUser(user) });
 }

@@ -26,18 +26,28 @@ export async function confirmOrderPayment(req: AuthRequest, res: Response): Prom
   }
 
   const file = req.file;
-  const { deliveryAddress, deliveryLatitude, deliveryLongitude, method, note, paidAt, reference } =
-    req.body as {
-      deliveryAddress?: string;
-      deliveryLatitude?: string;
-      deliveryLongitude?: string;
-      method?: string;
-      note?: string;
-      paidAt?: string;
-      reference?: string;
-    };
+  const {
+    customerNotes,
+    deliveryAddress,
+    deliveryLatitude,
+    deliveryLongitude,
+    method,
+    note,
+    paidAt,
+    reference,
+  } = req.body as {
+    customerNotes?: string;
+    deliveryAddress?: string;
+    deliveryLatitude?: string;
+    deliveryLongitude?: string;
+    method?: string;
+    note?: string;
+    paidAt?: string;
+    reference?: string;
+  };
 
   const validation = confirmPaymentSchema.validate({
+    customerNotes,
     deliveryAddress,
     deliveryLatitude:
       deliveryLatitude === undefined || deliveryLatitude === ''
@@ -87,6 +97,7 @@ export async function confirmOrderPayment(req: AuthRequest, res: Response): Prom
 
   try {
     const result = await confirmPendingOrderPaymentWithDetails(userId, orderId, {
+      customerNotes: validation.value.customerNotes ?? null,
       deliveryAddress: validation.value.deliveryAddress ?? null,
       deliveryLatitude: validation.value.deliveryLatitude,
       deliveryLongitude: validation.value.deliveryLongitude,

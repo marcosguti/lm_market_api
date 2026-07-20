@@ -13,11 +13,13 @@ import {
 } from '../../queries/brandDepartment.js';
 import { findProductById, updateProductById, upsertProductStores } from '../../queries/product.js';
 import { StoreNotFoundError } from '../../queries/store.js';
-import { patchSchema } from './schemas.js';
+import { normalizeAdminProductMultipartBody, patchSchema } from './schemas.js';
 import { serializeAdminProduct } from './serializeAdminProduct.js';
 
 export async function patchAdminProduct(req: AuthRequest, res: Response): Promise<void> {
-  const validation = patchSchema.validate(req.body);
+  const validation = patchSchema.validate(
+    normalizeAdminProductMultipartBody(req.body as Record<string, unknown>),
+  );
   if (validation.error) {
     res.status(400).json({ error: validation.error.message });
     return;

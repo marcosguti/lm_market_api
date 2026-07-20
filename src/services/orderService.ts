@@ -106,6 +106,7 @@ export function assertAdminCanAccessOrder(
 const client = prisma as PrismaClient;
 
 export interface ConfirmPaymentDetails {
+  customerNotes?: null | string;
   deliveryAddress?: null | string;
   deliveryLatitude?: null | number;
   deliveryLongitude?: null | number;
@@ -137,11 +138,18 @@ export interface MobilePaymentP2cDetails {
   amount: number;
   clientBankCode: string;
   clientPhone: string;
+  customerNotes?: null | string;
   deliveryAddress?: null | string;
   deliveryLatitude?: null | number;
   deliveryLongitude?: null | number;
   nationalId: string;
   reference: string;
+}
+
+export interface UserOrderHistoryFilters {
+  createdFrom?: Date;
+  createdTo?: Date;
+  q?: string;
 }
 
 export async function adminSetOrderStatus(
@@ -283,17 +291,22 @@ export function buildKitchenOrdersWhere(
   filters: KitchenOrdersFilters = {},
 ): PrismaType.OrderWhereInput {
   const { createdFrom, createdTo, id, status = 'all', storeId } = filters;
+  const dateRange =
+    createdFrom || createdTo
+      ? {
+          ...(createdFrom ? { gte: startOfBusinessDayCaracas(createdFrom) } : {}),
+          ...(createdTo ? { lt: startOfNextBusinessDayCaracas(createdTo) } : {}),
+        }
+      : null;
   return {
     ...(id ? { id: { contains: id } } : {}),
     ...(storeId ? { storeId } : {}),
     // "Todos" includes cancelled; unpaid carts (pending) stay out of the admin list.
     ...(status !== 'all' ? { status } : { status: { notIn: ['pending'] } }),
-    ...(createdFrom || createdTo
+    // Match if either creation or payment falls in the selected period.
+    ...(dateRange
       ? {
-          createdAt: {
-            ...(createdFrom ? { gte: startOfBusinessDayCaracas(createdFrom) } : {}),
-            ...(createdTo ? { lt: startOfNextBusinessDayCaracas(createdTo) } : {}),
-          },
+          OR: [{ createdAt: dateRange }, { paymentDate: dateRange }],
         }
       : {}),
   };
@@ -441,6 +454,15 @@ export async function confirmPendingOrderPaymentWithDetails(
       );
     }
 
+    const trimmedCustomerNotes = details.customerNotes?.trim() || null;
+    if (trimmedCustomerNotes && trimmedCustomerNotes.length > 280) {
+      throw new OrderDomainError(
+        'CUSTOMER_NOTES_TOO_LONG',
+        'Las instrucciones de entrega no pueden superar 280 caracteres',
+        400,
+      );
+    }
+
     let order = await tx.order.findUnique({ where: { id: orderId } });
     if (!order || order.userId !== userId) {
       throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
@@ -505,6 +527,7 @@ export async function confirmPendingOrderPaymentWithDetails(
     const delivery = await resolveDeliverySnapshot(tx, userId, order.storeId);
     const updatedCount = await tx.order.updateMany({
       data: {
+        customerNotes: trimmedCustomerNotes,
         deliveryAddress: delivery.deliveryAddress,
         deliveryLatitude: delivery.deliveryLatitude,
         deliveryLongitude: delivery.deliveryLongitude,
@@ -618,6 +641,11 @@ export async function ensurePendingCart(
   });
 }
 
+/** Escape `%`, `_`, and `\` for PostgreSQL ILIKE … ESCAPE '\\'. */
+export function escapeIlikePattern(raw: string): string {
+  return raw.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
+
 export async function getAnyOrderById(orderId: string): Promise<null | OrderWithLines> {
   const order = await client.order.findUnique({ where: { id: orderId } });
   return order ? serializeOrder(order) : null;
@@ -656,6 +684,7 @@ export async function getUserOrderHistory(
   userId: string,
   page: number,
   pageSize: number,
+  filters: UserOrderHistoryFilters = {},
 ): Promise<{
   data: OrderWithLines[];
   page: number;
@@ -664,20 +693,100 @@ export async function getUserOrderHistory(
   totalPages: number;
 }> {
   const skip = (page - 1) * pageSize;
-  const where: Prisma.OrderWhereInput = {
+  const qTrim = filters.q?.trim() ?? '';
+  const paymentDateGte = filters.createdFrom
+    ? startOfBusinessDayCaracas(filters.createdFrom)
+    : undefined;
+  const paymentDateLt = filters.createdTo
+    ? startOfNextBusinessDayCaracas(filters.createdTo)
+    : undefined;
+
+  const baseWhere: PrismaType.OrderWhereInput = {
     status: { not: 'pending' },
     userId,
+    ...(paymentDateGte || paymentDateLt
+      ? {
+          paymentDate: {
+            ...(paymentDateGte ? { gte: paymentDateGte } : {}),
+            ...(paymentDateLt ? { lt: paymentDateLt } : {}),
+          },
+        }
+      : {}),
   };
-  const [data, total] = await Promise.all([
-    client.order.findMany({
-      include: { store: { select: { name: true } } },
-      orderBy: { createdAt: 'desc' },
-      skip,
-      take: pageSize,
-      where,
-    }),
-    client.order.count({ where }),
-  ]);
+
+  let data: Array<{ store: { name: string } | null } & Order>;
+  let total: number;
+
+  if (!qTrim) {
+    const [rows, count] = await Promise.all([
+      client.order.findMany({
+        include: { store: { select: { name: true } } },
+        orderBy: [{ paymentDate: 'desc' }, { createdAt: 'desc' }],
+        skip,
+        take: pageSize,
+        where: baseWhere,
+      }),
+      client.order.count({ where: baseWhere }),
+    ]);
+    data = rows;
+    total = count;
+  } else {
+    const pattern = `%${escapeIlikePattern(qTrim)}%`;
+    const historySearchWhereSql = `
+      o."userId" = $1
+      AND o.status <> 'pending'
+      AND ($2::timestamptz IS NULL OR o."paymentDate" >= $2)
+      AND ($3::timestamptz IS NULL OR o."paymentDate" < $3)
+      AND (
+        o.id::text ILIKE $4 ESCAPE '\\'
+        OR EXISTS (
+          SELECT 1
+          FROM jsonb_array_elements(COALESCE(o.products::jsonb, '[]'::jsonb)) AS line
+          WHERE COALESCE(line->>'name', '') ILIKE $4 ESCAPE '\\'
+             OR COALESCE(line->>'description', '') ILIKE $4 ESCAPE '\\'
+        )
+      )
+    `;
+    const [idRows, countRows] = await Promise.all([
+      client.$queryRawUnsafe<{ id: string }[]>(
+        `SELECT o.id
+         FROM "Order" o
+         WHERE ${historySearchWhereSql}
+         ORDER BY o."paymentDate" DESC NULLS LAST, o."createdAt" DESC
+         LIMIT $5 OFFSET $6`,
+        userId,
+        paymentDateGte ?? null,
+        paymentDateLt ?? null,
+        pattern,
+        pageSize,
+        skip,
+      ),
+      client.$queryRawUnsafe<{ count: bigint }[]>(
+        `SELECT COUNT(*)::bigint AS count
+         FROM "Order" o
+         WHERE ${historySearchWhereSql}`,
+        userId,
+        paymentDateGte ?? null,
+        paymentDateLt ?? null,
+        pattern,
+      ),
+    ]);
+    total = Number(countRows[0]?.count ?? 0);
+    const ids = idRows.map((row) => row.id);
+    if (ids.length === 0) {
+      data = [];
+    } else {
+      const rows = await client.order.findMany({
+        include: { store: { select: { name: true } } },
+        where: { id: { in: ids } },
+      });
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      data = ids
+        .map((id) => byId.get(id))
+        .filter((row): row is (typeof rows)[number] => row !== undefined);
+    }
+  }
+
   const serialized = data.map((order) => ({
     ...serializeOrder(order),
     storeName: order.store?.name ?? null,
@@ -1424,8 +1533,17 @@ export async function verifyMobilePaymentP2c(
 
     const paidAt = new Date();
     const delivery = await resolveDeliverySnapshot(tx, userId, order.storeId);
+    const trimmedCustomerNotes = details.customerNotes?.trim() || null;
+    if (trimmedCustomerNotes && trimmedCustomerNotes.length > 280) {
+      throw new OrderDomainError(
+        'CUSTOMER_NOTES_TOO_LONG',
+        'Las instrucciones de entrega no pueden superar 280 caracteres',
+        400,
+      );
+    }
     const updated = await tx.order.updateMany({
       data: {
+        customerNotes: trimmedCustomerNotes,
         deliveryAddress: delivery.deliveryAddress,
         deliveryLatitude: delivery.deliveryLatitude,
         deliveryLongitude: delivery.deliveryLongitude,
