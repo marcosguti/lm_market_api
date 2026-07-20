@@ -20,6 +20,10 @@ vi.mock('../../../prisma.js', () => ({
     order: {
       findUnique: vi.fn().mockResolvedValue({ id: 'o1', totalAmount: 100 }),
     },
+    pushDevice: {
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
+      upsert: vi.fn().mockResolvedValue({ id: 'pd1' }),
+    },
     token: {
       deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
     },

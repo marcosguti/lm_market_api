@@ -367,6 +367,121 @@ const migrations: MigrationFunction[] = [
     },
     version: 11,
   },
+  {
+    name: 'Add Deal.active',
+    up: async (tx: TransactionClient) => {
+      await tx.$executeRaw`
+        ALTER TABLE "Deal"
+        ADD COLUMN IF NOT EXISTS "active" BOOLEAN NOT NULL DEFAULT true
+      `;
+      await tx.$executeRaw`
+        CREATE INDEX IF NOT EXISTS "Deal_active_idx" ON "Deal"("active")
+      `;
+      console.log('Deal.active column and index ensured');
+    },
+    version: 12,
+  },
+  {
+    name: 'Add User.storeId',
+    up: async (tx: TransactionClient) => {
+      await tx.$executeRaw`
+        ALTER TABLE "User"
+        ADD COLUMN IF NOT EXISTS "storeId" TEXT
+      `;
+      await tx.$executeRaw`
+        CREATE INDEX IF NOT EXISTS "User_storeId_idx" ON "User"("storeId")
+      `;
+      await tx.$executeRaw`
+        DO $$
+        BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'User_storeId_fkey'
+          ) THEN
+            ALTER TABLE "User"
+              ADD CONSTRAINT "User_storeId_fkey"
+              FOREIGN KEY ("storeId") REFERENCES "Store"("id")
+              ON DELETE RESTRICT ON UPDATE CASCADE;
+          END IF;
+        END $$;
+      `;
+      console.log('User.storeId column, index and FK ensured');
+    },
+    version: 13,
+  },
+  {
+    name: 'Backfill admin users storeId to Las Americas',
+    up: async (tx: TransactionClient) => {
+      const lasAmericas = await tx.store.findUnique({
+        where: { externalBranchCode: '1' },
+      });
+      if (!lasAmericas) {
+        throw new Error(
+          'Store Las Americas (externalBranchCode=1) not found; cannot backfill admin storeId',
+        );
+      }
+      const result = await tx.user.updateMany({
+        data: { storeId: lasAmericas.id },
+        where: { storeId: null, type: 'admin' },
+      });
+      console.log(`Backfilled storeId=Las Americas for ${result.count} admin user(s)`);
+    },
+    version: 14,
+  },
+  {
+    name: 'Backfill deliveryDriver users storeId to Las Americas',
+    up: async (tx: TransactionClient) => {
+      const lasAmericas = await tx.store.findUnique({
+        where: { externalBranchCode: '1' },
+      });
+      if (!lasAmericas) {
+        throw new Error(
+          'Store Las Americas (externalBranchCode=1) not found; cannot backfill deliveryDriver storeId',
+        );
+      }
+      const result = await tx.user.updateMany({
+        data: { storeId: lasAmericas.id },
+        where: { storeId: null, type: 'deliveryDriver' },
+      });
+      console.log(`Backfilled storeId=Las Americas for ${result.count} deliveryDriver user(s)`);
+    },
+    version: 15,
+  },
+  {
+    name: 'Add PushDevice table for FCM tokens',
+    up: async (tx: TransactionClient) => {
+      await tx.$executeRaw`
+        CREATE TABLE IF NOT EXISTS "PushDevice" (
+          "id" TEXT NOT NULL,
+          "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "platform" TEXT NOT NULL,
+          "token" TEXT NOT NULL,
+          "updatedAt" TIMESTAMP(3) NOT NULL,
+          "userId" TEXT NOT NULL,
+          CONSTRAINT "PushDevice_pkey" PRIMARY KEY ("id")
+        )
+      `;
+      await tx.$executeRaw`
+        CREATE UNIQUE INDEX IF NOT EXISTS "PushDevice_token_key" ON "PushDevice"("token")
+      `;
+      await tx.$executeRaw`
+        CREATE INDEX IF NOT EXISTS "PushDevice_userId_idx" ON "PushDevice"("userId")
+      `;
+      await tx.$executeRaw`
+        DO $$ BEGIN
+          IF NOT EXISTS (
+            SELECT 1 FROM pg_constraint WHERE conname = 'PushDevice_userId_fkey'
+          ) THEN
+            ALTER TABLE "PushDevice"
+              ADD CONSTRAINT "PushDevice_userId_fkey"
+              FOREIGN KEY ("userId") REFERENCES "User"("id")
+              ON DELETE CASCADE ON UPDATE CASCADE;
+          END IF;
+        END $$;
+      `;
+      console.log('PushDevice table, indexes and FK ensured');
+    },
+    version: 16,
+  },
 ];
 
 const runMigrations = async () => {

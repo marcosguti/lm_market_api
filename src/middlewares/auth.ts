@@ -5,6 +5,7 @@ import { verifyToken } from '../libs/jwt.js';
 import { findUserById } from '../queries/user.js';
 
 export interface AuthRequest extends Request {
+  storeId?: null | string;
   userId?: string;
   userType?: UserType;
 }
@@ -41,6 +42,7 @@ export async function authMiddleware(
     if (user) {
       req.userId = payload.userId;
       req.userType = user.type;
+      req.storeId = user.storeId ?? null;
       // eslint-disable-next-line no-console
       console.log('[authMiddleware] user set, type:', user.type);
     } else {

@@ -6,14 +6,14 @@ import {
   emitDeliveryOrderCancelled,
   emitKitchenOrderUpdated,
   emitOrderUpdated,
-  emitUserNotification,
 } from '../../realtime/socket.js';
 import {
-  createOrderStatusNotification,
+  assertAdminCanAccessOrder,
   getAnyOrderById,
+  notifyDeliveryCancelled,
+  notifyOrderStatusChange,
   unassignOrderFromDelivery,
 } from '../../services/orderService.js';
-import { formatOrderStatusChangeBody } from '../../utils/orderStatusLabels.js';
 import { getParam, handleOrderError } from '../shared/orderHttp.js';
 
 export async function unassignDelivery(req: AuthRequest, res: Response): Promise<void> {
@@ -30,18 +30,11 @@ export async function unassignDelivery(req: AuthRequest, res: Response): Promise
       return;
     }
 
+    assertAdminCanAccessOrder(req.userType, req.storeId, before);
+
     const previousDriverId = before.deliveryUserId;
     const updated = await unassignOrderFromDelivery(orderId, req.userId);
-    await createOrderStatusNotification(updated, before.status);
-    emitUserNotification(updated.userId, {
-      body: formatOrderStatusChangeBody(before.status, updated.status),
-      newStatus: updated.status,
-      orderId: updated.id,
-      previousStatus: before.status,
-      status: updated.status,
-      title: 'Actualización de orden',
-      type: 'ORDER_STATUS_CHANGED',
-    });
+    await notifyOrderStatusChange(updated, before.status);
     const orderPayload = {
       id: updated.id,
       status: updated.status,
@@ -51,6 +44,7 @@ export async function unassignDelivery(req: AuthRequest, res: Response): Promise
     emitKitchenOrderUpdated(orderPayload);
     if (previousDriverId) {
       emitDeliveryOrderCancelled(previousDriverId, { orderId: updated.id });
+      await notifyDeliveryCancelled(updated.id, previousDriverId);
     }
 
     res.json({ order: updated });

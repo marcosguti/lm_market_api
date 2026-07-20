@@ -22,11 +22,11 @@ describe('RBAC scoping rules', () => {
   });
 
   describe('GET /api/admin/users actor scoping', () => {
-    it('passes admin actorType to listUsersPaginated', async () => {
+    it('passes admin actorType and actorStoreId to listUsersPaginated', async () => {
       mockAuthenticatedUser('admin-1', 'admin');
       await request(app).get('/api/admin/users').set(authHeader());
       expect(getUserQueryMocks().listUsersPaginated).toHaveBeenCalledWith(
-        expect.objectContaining({ actorType: 'admin' }),
+        expect.objectContaining({ actorStoreId: 'store-1', actorType: 'admin' }),
       );
     });
 
@@ -85,6 +85,102 @@ describe('RBAC scoping rules', () => {
         });
       expect(res.status).toBe(403);
       expect(getOrderMocks().markOrderDelivered).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('store scoping on admin order mutations', () => {
+    const assignBody = { deliveryUserId: '22222222-2222-2222-2222-222222222222' };
+
+    it('returns 403 when admin has no store on assign-delivery', async () => {
+      mockAuthenticatedUser('admin-1', 'admin', { storeId: null });
+      const res = await request(app)
+        .post(`/api/admin/orders/${ORDER_ID}/assign-delivery`)
+        .set(authHeader())
+        .send(assignBody);
+      expect(res.status).toBe(403);
+      expect(getOrderMocks().assignOrderToDelivery).not.toHaveBeenCalled();
+    });
+
+    it('returns 403 when admin assigns delivery on another store order', async () => {
+      mockAuthenticatedUser('admin-1', 'admin', { storeId: 'store-1' });
+      getOrderMocks().getAnyOrderById.mockResolvedValue({
+        id: ORDER_ID,
+        status: 'readyForDelivery',
+        storeId: 'store-2',
+        userId: 'u1',
+        products: [],
+        totalAmount: 0,
+      });
+      const res = await request(app)
+        .post(`/api/admin/orders/${ORDER_ID}/assign-delivery`)
+        .set(authHeader())
+        .send(assignBody);
+      expect(res.status).toBe(403);
+      expect(getOrderMocks().assignOrderToDelivery).not.toHaveBeenCalled();
+    });
+
+    it('allows admin to assign delivery on own store order', async () => {
+      mockAuthenticatedUser('admin-1', 'admin', { storeId: 'store-1' });
+      getOrderMocks().getAnyOrderById.mockResolvedValue({
+        id: ORDER_ID,
+        status: 'readyForDelivery',
+        storeId: 'store-1',
+        userId: 'u1',
+        products: [],
+        totalAmount: 0,
+      });
+      const res = await request(app)
+        .post(`/api/admin/orders/${ORDER_ID}/assign-delivery`)
+        .set(authHeader())
+        .send(assignBody);
+      expect(res.status).toBe(200);
+      expect(getOrderMocks().assignOrderToDelivery).toHaveBeenCalled();
+    });
+
+    it('allows superAdmin to assign delivery on any store order', async () => {
+      mockAuthenticatedUser('super-1', 'superAdmin', { storeId: null });
+      getOrderMocks().getAnyOrderById.mockResolvedValue({
+        id: ORDER_ID,
+        status: 'readyForDelivery',
+        storeId: 'store-2',
+        userId: 'u1',
+        products: [],
+        totalAmount: 0,
+      });
+      const res = await request(app)
+        .post(`/api/admin/orders/${ORDER_ID}/assign-delivery`)
+        .set(authHeader())
+        .send(assignBody);
+      expect(res.status).toBe(200);
+      expect(getOrderMocks().assignOrderToDelivery).toHaveBeenCalled();
+    });
+
+    it('returns 403 when admin has no store on status patch', async () => {
+      mockAuthenticatedUser('admin-1', 'admin', { storeId: null });
+      const res = await request(app)
+        .patch(`/api/admin/orders/${ORDER_ID}/status`)
+        .set(authHeader())
+        .send({ status: 'preparing' });
+      expect(res.status).toBe(403);
+      expect(getOrderMocks().adminSetOrderStatus).not.toHaveBeenCalled();
+    });
+
+    it('returns 403 when admin patches status of another store order', async () => {
+      mockAuthenticatedUser('admin-1', 'admin', { storeId: 'store-1' });
+      getOrderMocks().getAnyOrderById.mockResolvedValue({
+        id: ORDER_ID,
+        status: 'paymentConfirmed',
+        storeId: 'store-2',
+        userId: 'u1',
+        products: [],
+        totalAmount: 0,
+      });
+      const res = await request(app)
+        .patch(`/api/admin/orders/${ORDER_ID}/status`)
+        .set(authHeader())
+        .send({ status: 'preparing' });
+      expect(res.status).toBe(403);
+      expect(getOrderMocks().adminSetOrderStatus).not.toHaveBeenCalled();
     });
   });
 });

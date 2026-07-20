@@ -6,16 +6,11 @@ import type { AuthRequest } from '../../middlewares/auth.js';
 
 import { megasoftConfig } from '../../config/megasoft.js';
 import { uploadPaymentScreenshot } from '../../libs/filesInDigitalOcean/index.js';
-import {
-  emitKitchenOrderUpdated,
-  emitOrderUpdated,
-  emitUserNotification,
-} from '../../realtime/socket.js';
+import { emitKitchenOrderUpdated, emitOrderUpdated } from '../../realtime/socket.js';
 import {
   confirmPendingOrderPaymentWithDetails,
-  createOrderStatusNotification,
+  notifyOrderStatusChange,
 } from '../../services/orderService.js';
-import { formatOrderStatusChangeBody } from '../../utils/orderStatusLabels.js';
 import { getParam, handleOrderError } from '../shared/orderHttp.js';
 import { asClient } from './asClient.js';
 import { confirmPaymentSchema } from './schemas.js';
@@ -102,16 +97,7 @@ export async function confirmOrderPayment(req: AuthRequest, res: Response): Prom
       screenshotUrl,
     });
 
-    await createOrderStatusNotification(result.order, 'pending');
-    emitUserNotification(result.order.userId, {
-      body: formatOrderStatusChangeBody('pending', result.order.status),
-      newStatus: result.order.status,
-      orderId: result.order.id,
-      previousStatus: 'pending',
-      status: result.order.status,
-      title: 'Actualización de orden',
-      type: 'ORDER_STATUS_CHANGED',
-    });
+    await notifyOrderStatusChange(result.order, 'pending');
     const orderPayload = {
       id: result.order.id,
       status: result.order.status,

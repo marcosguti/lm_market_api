@@ -1,7 +1,10 @@
+import type { UserType } from '@prisma/client';
 import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { assertAdminCanManageUser, StoreScopeError } from '../../middlewares/storeScope.js';
+import { assertStoreActive, StoreNotFoundError } from '../../queries/store.js';
 import {
   findUserByEmail,
   findUserById,
@@ -30,6 +33,65 @@ export async function patchAdminUser(req: AuthRequest, res: Response): Promise<v
     return;
   }
 
+  const isSuper = req.userType === 'superAdmin';
+
+  if (body.type === 'admin' && !isSuper) {
+    res.status(403).json({ error: 'Acceso denegado' });
+    return;
+  }
+  if (body.storeId !== undefined && !isSuper) {
+    res.status(403).json({ error: 'Acceso denegado' });
+    return;
+  }
+
+  try {
+    assertAdminCanManageUser(req.userType, req.storeId, existing);
+  } catch (err) {
+    if (err instanceof StoreScopeError) {
+      res.status(err.statusCode).json({ error: err.message });
+      return;
+    }
+    throw err;
+  }
+
+  const nextType = (body.type ?? existing.type) as UserType;
+
+  if (!isSuper && req.userType === 'admin' && nextType === 'deliveryDriver' && !req.storeId) {
+    res.status(403).json({ error: 'Acceso denegado' });
+    return;
+  }
+
+  let nextStoreId: null | string;
+  if (!needsStore(nextType)) {
+    nextStoreId = null;
+  } else if (isSuper) {
+    if (body.storeId !== undefined) {
+      nextStoreId = body.storeId;
+    } else {
+      nextStoreId = existing.storeId;
+    }
+  } else {
+    // Admin: never take storeId from body; keep/force actor store for drivers.
+    nextStoreId = req.storeId ?? null;
+  }
+
+  if (needsStore(nextType) && !nextStoreId) {
+    res.status(400).json({ error: '"storeId" is required' });
+    return;
+  }
+
+  if (nextStoreId) {
+    try {
+      await assertStoreActive(nextStoreId);
+    } catch (err) {
+      if (err instanceof StoreNotFoundError) {
+        res.status(err.statusCode).json({ code: err.code, error: err.message });
+        return;
+      }
+      throw err;
+    }
+  }
+
   if (body.email !== undefined && body.email !== existing.email) {
     const clash = await findUserByEmail(body.email);
     if (clash && clash.id !== id) {
@@ -54,6 +116,8 @@ export async function patchAdminUser(req: AuthRequest, res: Response): Promise<v
     }
   }
 
+  const shouldUpdateStore = nextStoreId !== existing.storeId;
+
   try {
     const user = await updateUserByAdmin(id, {
       ...(body.address !== undefined && { address: body.address }),
@@ -64,6 +128,7 @@ export async function patchAdminUser(req: AuthRequest, res: Response): Promise<v
       ...(body.numberIdType !== undefined && { numberIdType: body.numberIdType }),
       ...(body.phone !== undefined && { phone: body.phone }),
       ...(body.type !== undefined && { type: body.type }),
+      ...(shouldUpdateStore && { storeId: nextStoreId }),
     });
     res.json({ user: serializeUser(user) });
   } catch (err) {
@@ -73,4 +138,8 @@ export async function patchAdminUser(req: AuthRequest, res: Response): Promise<v
     }
     throw err;
   }
+}
+
+function needsStore(type: string | UserType): boolean {
+  return type === 'admin' || type === 'deliveryDriver';
 }

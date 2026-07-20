@@ -18,13 +18,19 @@ vi.mock('../logo.js', () => ({
   LOGO_CONTENT_ID: 'logo',
 }));
 
-import { sendEmailVerificationCode, sendLoginCode, sendPasswordResetEmail } from '../index.js';
+import {
+  sendContactEmail,
+  sendEmailVerificationCode,
+  sendLoginCode,
+  sendPasswordResetEmail,
+} from '../index.js';
 
 function stubMailjetEnv(): void {
   vi.stubEnv('MAILJET_API_KEY', 'test-key');
   vi.stubEnv('MAILJET_SECRET_KEY', 'test-secret');
   vi.stubEnv('MAIL_FROM_EMAIL', 'noreply@test.com');
   vi.stubEnv('MAIL_FROM_NAME', 'LM Market Test');
+  vi.stubEnv('SUPPORT_EMAIL', 'Soporte@lmmarketca.com');
 }
 
 function mockSuccessResponse(): void {
@@ -171,6 +177,43 @@ describe('sendEmail transport', () => {
           ttlHours: 1,
         }),
       ).rejects.toThrow(/MAILJET_SECRET_KEY/);
+    });
+  });
+
+  describe('sendContactEmail', () => {
+    it('sends contact email to SUPPORT_EMAIL with Reply-To', async () => {
+      await sendContactEmail({
+        area: 'ventas',
+        email: 'cliente@test.com',
+        message: 'Quiero información sobre un pedido.',
+        name: 'Marco',
+        subject: 'Consulta de pedido',
+      });
+
+      expect(mailjetRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          Messages: [
+            expect.objectContaining({
+              ReplyTo: { Email: 'cliente@test.com' },
+              Subject: '[Contacto · Ventas] Consulta de pedido',
+              To: [{ Email: 'Soporte@lmmarketca.com' }],
+            }),
+          ],
+        }),
+      );
+    });
+
+    it('throws when SUPPORT_EMAIL is missing', async () => {
+      vi.stubEnv('SUPPORT_EMAIL', '');
+      await expect(
+        sendContactEmail({
+          area: 'soporte',
+          email: 'cliente@test.com',
+          message: 'Necesito ayuda con mi cuenta.',
+          name: 'Ana',
+          subject: 'Ayuda',
+        }),
+      ).rejects.toThrow(/SUPPORT_EMAIL/);
     });
   });
 });

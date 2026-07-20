@@ -18,6 +18,7 @@ export async function createUser(data: {
   numberIdType: NumberIdType;
   password: string;
   phone?: string;
+  storeId?: null | string;
   type?: UserType;
 }): Promise<User> {
   return prisma.user.create({
@@ -31,6 +32,7 @@ export async function createUser(data: {
       numberIdType: data.numberIdType,
       password: data.password,
       phone: data.phone,
+      storeId: data.storeId ?? null,
       type: data.type ?? 'client',
     },
   });
@@ -65,31 +67,40 @@ export async function findUserByPhone(phone: string): Promise<null | User> {
 }
 
 export async function listUsersPaginated(params: {
+  actorStoreId?: null | string;
   actorType: UserType;
   page: number;
   pageSize: number;
   search?: string;
 }): Promise<{ data: User[]; total: number }> {
-  const { actorType, page, pageSize, search } = params;
+  const { actorStoreId, actorType, page, pageSize, search } = params;
   const skip = (page - 1) * pageSize;
   const searchTrim = search?.trim();
 
-  const typeFilter: Prisma.UserWhereInput =
-    actorType === 'admin' ? { type: { in: ['client', 'deliveryDriver'] } } : {};
-
-  const where: Prisma.UserWhereInput = {
-    ...typeFilter,
-    ...(searchTrim
+  let typeFilter: Prisma.UserWhereInput = {};
+  if (actorType === 'admin') {
+    typeFilter = actorStoreId
       ? {
-          OR: [
-            { email: { contains: searchTrim, mode: 'insensitive' } },
-            { firstName: { contains: searchTrim, mode: 'insensitive' } },
-            { lastName: { contains: searchTrim, mode: 'insensitive' } },
-            { numberId: { contains: searchTrim, mode: 'insensitive' } },
-          ],
+          OR: [{ type: 'client' }, { storeId: actorStoreId, type: 'deliveryDriver' }],
         }
-      : {}),
-  };
+      : { type: 'client' };
+  }
+
+  const searchFilter: Prisma.UserWhereInput | undefined = searchTrim
+    ? {
+        OR: [
+          { email: { contains: searchTrim, mode: 'insensitive' } },
+          { firstName: { contains: searchTrim, mode: 'insensitive' } },
+          { lastName: { contains: searchTrim, mode: 'insensitive' } },
+          { numberId: { contains: searchTrim, mode: 'insensitive' } },
+        ],
+      }
+    : undefined;
+
+  const where: Prisma.UserWhereInput =
+    actorType === 'admin' && searchFilter
+      ? { AND: [typeFilter, searchFilter] }
+      : { ...typeFilter, ...searchFilter };
 
   const [data, total] = await Promise.all([
     prisma.user.findMany({
@@ -150,6 +161,7 @@ export async function updateUserByAdmin(
     numberId?: string;
     numberIdType?: NumberIdType;
     phone?: string;
+    storeId?: null | string;
     type?: UserType;
   },
 ): Promise<User> {
@@ -162,6 +174,7 @@ export async function updateUserByAdmin(
       ...(data.numberId !== undefined && { numberId: data.numberId }),
       ...(data.numberIdType !== undefined && { numberIdType: data.numberIdType }),
       ...(data.phone !== undefined && { phone: data.phone || null }),
+      ...(data.storeId !== undefined && { storeId: data.storeId }),
       ...(data.type !== undefined && { type: data.type }),
     },
     where: { id: userId },

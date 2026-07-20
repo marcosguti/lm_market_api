@@ -10,6 +10,7 @@ export const listQuerySchema = Joi.object({
   search: Joi.string().allow('').optional(),
 });
 
+/** storeId is validated in the controller based on actor role (superAdmin vs admin). */
 export const createSchema = Joi.object({
   address: Joi.string().allow('').optional(),
   email: Joi.string().email().required(),
@@ -26,6 +27,7 @@ export const createSchema = Joi.object({
       'string.pattern.base': 'La contraseña debe contener mayúsculas, minúsculas y números',
     }),
   phone: phoneSchema.optional(),
+  storeId: Joi.string().uuid().allow(null).optional(),
   type: Joi.string().valid('admin', 'client', 'deliveryDriver').required(),
 });
 
@@ -37,5 +39,6 @@ export const patchSchema = Joi.object({
   numberId: Joi.string().optional(),
   numberIdType: Joi.string().valid('V', 'E', 'P', 'J').optional(),
   phone: phoneSchema.optional(),
+  storeId: Joi.string().uuid().allow(null).optional(),
   type: Joi.string().valid('admin', 'client', 'deliveryDriver').optional(),
 }).min(1);

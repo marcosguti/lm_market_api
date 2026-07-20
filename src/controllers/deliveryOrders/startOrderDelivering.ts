@@ -2,17 +2,12 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { emitKitchenOrderUpdated, emitOrderUpdated } from '../../realtime/socket.js';
 import {
-  emitKitchenOrderUpdated,
-  emitOrderUpdated,
-  emitUserNotification,
-} from '../../realtime/socket.js';
-import {
-  createOrderStatusNotification,
   getAnyOrderById,
+  notifyOrderStatusChange,
   startOrderDelivering,
 } from '../../services/orderService.js';
-import { formatOrderStatusChangeBody } from '../../utils/orderStatusLabels.js';
 import { getParam, handleOrderError } from '../shared/orderHttp.js';
 
 export async function startDeliveryOrder(req: AuthRequest, res: Response): Promise<void> {
@@ -26,16 +21,7 @@ export async function startDeliveryOrder(req: AuthRequest, res: Response): Promi
     const before = await getAnyOrderById(orderId);
     const updated = await startOrderDelivering(req.userType, orderId, req.userId);
     if (before) {
-      await createOrderStatusNotification(updated, before.status);
-      emitUserNotification(updated.userId, {
-        body: formatOrderStatusChangeBody(before.status, updated.status),
-        newStatus: updated.status,
-        orderId: updated.id,
-        previousStatus: before.status,
-        status: updated.status,
-        title: 'Actualización de orden',
-        type: 'ORDER_STATUS_CHANGED',
-      });
+      await notifyOrderStatusChange(updated, before.status);
       const orderPayload = {
         id: updated.id,
         status: updated.status,

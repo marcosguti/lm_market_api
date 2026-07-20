@@ -3,6 +3,7 @@ import type { Deal } from '@prisma/client';
 import prisma from '../prisma.js';
 
 export interface DealInput {
+  active?: boolean;
   description?: null | string;
   endDate: Date;
   imageUrl: string;
@@ -10,6 +11,7 @@ export interface DealInput {
 }
 
 export interface DealUpdate {
+  active?: boolean;
   description?: null | string;
   endDate?: Date;
   imageUrl?: string;
@@ -32,6 +34,7 @@ export async function getActiveDeals(): Promise<string[]> {
     orderBy: { startDate: 'desc' },
     select: { imageUrl: true },
     where: {
+      active: true,
       endDate: { gte: today },
       startDate: { lte: endOfToday },
     },

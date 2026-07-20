@@ -5,18 +5,13 @@ import { randomUUID } from 'crypto';
 import type { AuthRequest } from '../../middlewares/auth.js';
 
 import { uploadDeliveryProof } from '../../libs/filesInDigitalOcean/index.js';
-import {
-  emitKitchenOrderUpdated,
-  emitOrderUpdated,
-  emitUserNotification,
-} from '../../realtime/socket.js';
+import { emitKitchenOrderUpdated, emitOrderUpdated } from '../../realtime/socket.js';
 import { endDeliveryTrackingAndNotify } from '../../services/orderDeliveryTrackingService.js';
 import {
-  createOrderStatusNotification,
   getAnyOrderById,
   markOrderDelivered,
+  notifyOrderStatusChange,
 } from '../../services/orderService.js';
-import { formatOrderStatusChangeBody } from '../../utils/orderStatusLabels.js';
 import { getParam, handleOrderError } from '../shared/orderHttp.js';
 
 export async function markDeliveryOrderAsDelivered(req: AuthRequest, res: Response): Promise<void> {
@@ -45,16 +40,7 @@ export async function markDeliveryOrderAsDelivered(req: AuthRequest, res: Respon
     const before = await getAnyOrderById(orderId);
     const updated = await markOrderDelivered(req.userType, orderId, req.userId, proofUrl);
     if (before) {
-      await createOrderStatusNotification(updated, before.status);
-      emitUserNotification(updated.userId, {
-        body: formatOrderStatusChangeBody(before.status, updated.status),
-        newStatus: updated.status,
-        orderId: updated.id,
-        previousStatus: before.status,
-        status: updated.status,
-        title: 'Actualización de orden',
-        type: 'ORDER_STATUS_CHANGED',
-      });
+      await notifyOrderStatusChange(updated, before.status);
       const orderPayload = {
         id: updated.id,
         status: updated.status,

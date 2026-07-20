@@ -46,6 +46,10 @@ vi.mock('../../realtime/socket.js', () => ({
   emitUserNotification: vi.fn(),
 }));
 
+vi.mock('../../libs/fcm/index.js', () => ({
+  sendPushToUser: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../../config/megasoft.js', () => ({
   megasoftConfig: {
     amountOverride: null,
@@ -776,13 +780,22 @@ describe('orderService async flows', () => {
   });
 
   describe('assignOrderToDelivery', () => {
-    it('assigns ready order to delivery driver', async () => {
-      txMocks.user.findUnique.mockResolvedValue({ id: 'driver-1', type: 'deliveryDriver' });
+    it('assigns ready order to delivery driver of the same store', async () => {
+      txMocks.user.findUnique.mockResolvedValue({
+        id: 'driver-1',
+        storeId: 'store-1',
+        type: 'deliveryDriver',
+      });
       txMocks.order.findUnique
-        .mockResolvedValueOnce(makeOrder({ status: 'readyForDelivery' }))
+        .mockResolvedValueOnce(makeOrder({ status: 'readyForDelivery', storeId: 'store-1' }))
         .mockResolvedValueOnce(
-          makeOrder({ deliveryUserId: 'driver-1', status: 'assignedToDeliveryDriver' }),
+          makeOrder({
+            deliveryUserId: 'driver-1',
+            status: 'assignedToDeliveryDriver',
+            storeId: 'store-1',
+          }),
         );
+      txMocks.order.count.mockResolvedValue(0);
       txMocks.order.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await assignOrderToDelivery('o1', 'driver-1', 'admin-1');
@@ -791,10 +804,93 @@ describe('orderService async flows', () => {
     });
 
     it('rejects non-driver user', async () => {
-      txMocks.user.findUnique.mockResolvedValue({ id: 'u1', type: 'client' });
+      txMocks.user.findUnique.mockResolvedValue({ id: 'u1', storeId: 'store-1', type: 'client' });
 
       await expect(assignOrderToDelivery('o1', 'u1', 'admin-1')).rejects.toMatchObject({
         code: 'INVALID_DELIVERY_DRIVER',
+        statusCode: 400,
+      });
+    });
+
+    it('rejects driver from another store', async () => {
+      txMocks.user.findUnique.mockResolvedValue({
+        id: 'driver-2',
+        storeId: 'store-2',
+        type: 'deliveryDriver',
+      });
+      txMocks.order.findUnique.mockResolvedValue(
+        makeOrder({ status: 'readyForDelivery', storeId: 'store-1' }),
+      );
+
+      await expect(assignOrderToDelivery('o1', 'driver-2', 'admin-1')).rejects.toMatchObject({
+        code: 'DRIVER_STORE_MISMATCH',
+        statusCode: 400,
+      });
+      expect(txMocks.order.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects when order has no store', async () => {
+      txMocks.user.findUnique.mockResolvedValue({
+        id: 'driver-1',
+        storeId: 'store-1',
+        type: 'deliveryDriver',
+      });
+      txMocks.order.findUnique.mockResolvedValue(
+        makeOrder({ status: 'readyForDelivery', storeId: null }),
+      );
+
+      await expect(assignOrderToDelivery('o1', 'driver-1', 'admin-1')).rejects.toMatchObject({
+        code: 'DRIVER_STORE_MISMATCH',
+        statusCode: 400,
+      });
+    });
+
+    it('rejects when driver has no store', async () => {
+      txMocks.user.findUnique.mockResolvedValue({
+        id: 'driver-1',
+        storeId: null,
+        type: 'deliveryDriver',
+      });
+      txMocks.order.findUnique.mockResolvedValue(
+        makeOrder({ status: 'readyForDelivery', storeId: 'store-1' }),
+      );
+
+      await expect(assignOrderToDelivery('o1', 'driver-1', 'admin-1')).rejects.toMatchObject({
+        code: 'DRIVER_STORE_MISMATCH',
+        statusCode: 400,
+      });
+    });
+
+    it('rejects busy driver with an order in progress', async () => {
+      txMocks.user.findUnique.mockResolvedValue({
+        id: 'driver-1',
+        storeId: 'store-1',
+        type: 'deliveryDriver',
+      });
+      txMocks.order.findUnique.mockResolvedValue(
+        makeOrder({ status: 'readyForDelivery', storeId: 'store-1' }),
+      );
+      txMocks.order.count.mockResolvedValue(1);
+
+      await expect(assignOrderToDelivery('o1', 'driver-1', 'admin-1')).rejects.toMatchObject({
+        code: 'DRIVER_BUSY',
+        statusCode: 409,
+      });
+      expect(txMocks.order.updateMany).not.toHaveBeenCalled();
+    });
+
+    it('rejects when order is not readyForDelivery', async () => {
+      txMocks.user.findUnique.mockResolvedValue({
+        id: 'driver-1',
+        storeId: 'store-1',
+        type: 'deliveryDriver',
+      });
+      txMocks.order.findUnique.mockResolvedValue(
+        makeOrder({ status: 'preparing', storeId: 'store-1' }),
+      );
+
+      await expect(assignOrderToDelivery('o1', 'driver-1', 'admin-1')).rejects.toMatchObject({
+        code: 'INVALID_STATUS_TRANSITION',
         statusCode: 400,
       });
     });

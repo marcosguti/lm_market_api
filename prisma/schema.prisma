@@ -57,6 +57,7 @@ model User {
   phone             String?      @unique
   phoneVerified     Boolean      @default(false)
   emailVerified     Boolean      @default(false)
+  storeId           String?
   type              UserType
   updatedAt         DateTime     @updatedAt
 
@@ -67,7 +68,11 @@ model User {
   orderStatusChanges     OrderStatusHistory[]
   passwordResetTokens    PasswordResetToken[]
   emailVerificationCodes EmailVerificationCode[]
+  pushDevices            PushDevice[]
+  store                  Store?                  @relation(fields: [storeId], references: [id], onDelete: Restrict)
   tokens                 Token[]
+
+  @@index([storeId])
 }
 
 enum OtpCodePurpose {
@@ -148,8 +153,9 @@ model Store {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
 
-  productStores ProductStore[]
+  admins        User[]
   orders        Order[]
+  productStores ProductStore[]
 
   @@index([externalBranchCode])
   @@index([active])
@@ -342,6 +348,19 @@ model LinkedDevice {
   @@index([userId])
 }
 
+model PushDevice {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  platform  String
+  token     String   @unique
+  updatedAt DateTime @updatedAt
+  userId    String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
 model PasswordResetToken {
   id        String   @id @default(uuid())
   expiresAt DateTime
@@ -356,6 +375,7 @@ model PasswordResetToken {
 
 model Deal {
   id          String   @id @default(uuid())
+  active      Boolean  @default(true)
   description String?  @db.VarChar(300)
   imageUrl    String
   startDate   DateTime
@@ -363,6 +383,7 @@ model Deal {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  @@index([active])
   @@index([startDate, endDate])
 }
 

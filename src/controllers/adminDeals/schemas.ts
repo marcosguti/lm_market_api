@@ -12,6 +12,19 @@ export function parseDealDate(value: Date | string): Date {
   return startOfDay(new Date(value));
 }
 
+export function parseMultipartBoolean(value: unknown): boolean | undefined {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  if (value === true || value === 'true') {
+    return true;
+  }
+  if (value === false || value === 'false') {
+    return false;
+  }
+  return undefined;
+}
+
 export function validateDealDateRange(
   startDate: Date,
   endDate: Date,
@@ -37,6 +50,7 @@ function startOfDay(date: Date): Date {
 }
 
 export const createDealSchema = Joi.object({
+  active: Joi.boolean().optional().default(true),
   description: Joi.string().max(300).allow(null, '').optional(),
   endDate: Joi.date().required(),
   startDate: Joi.date().required(),
@@ -51,6 +65,7 @@ export const createDealSchema = Joi.object({
 });
 
 export const updateDealSchema = Joi.object({
+  active: Joi.boolean().optional(),
   description: Joi.string().max(300).allow(null, '').optional(),
   endDate: Joi.date().optional(),
   startDate: Joi.date().optional(),

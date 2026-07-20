@@ -6,7 +6,7 @@ import type { AuthRequest } from '../../middlewares/auth.js';
 
 import { uploadDealImage } from '../../libs/filesInDigitalOcean/index.js';
 import { createDeal } from '../../services/dealService.js';
-import { createDealSchema, parseDealDate } from './schemas.js';
+import { createDealSchema, parseDealDate, parseMultipartBoolean } from './schemas.js';
 
 export async function createAdminDeal(req: AuthRequest, res: Response): Promise<void> {
   const file = req.file;
@@ -15,13 +15,15 @@ export async function createAdminDeal(req: AuthRequest, res: Response): Promise<
     return;
   }
 
-  const { description, endDate, startDate } = req.body as {
+  const { active, description, endDate, startDate } = req.body as {
+    active?: string;
     description?: string;
     endDate?: string;
     startDate?: string;
   };
 
   const validation = createDealSchema.validate({
+    active: parseMultipartBoolean(active),
     description: description || null,
     endDate: endDate ? parseDealDate(endDate) : undefined,
     startDate: startDate ? parseDealDate(startDate) : undefined,
@@ -38,6 +40,7 @@ export async function createAdminDeal(req: AuthRequest, res: Response): Promise<
     const imageUrl = await uploadDealImage(file.buffer, file.mimetype, ext, fileName);
 
     const deal = await createDeal({
+      active: validation.value.active ?? true,
       description: validation.value.description ?? null,
       endDate: parseDealDate(validation.value.endDate),
       imageUrl,

@@ -11,6 +11,7 @@ import authRoutes from './auth.js';
 import bannerRoutes from './banners.js';
 import blogArticleRoutes from './blogArticles.js';
 import brandRoutes from './brands.js';
+import contactRoutes from './contact.js';
 import dealRoutes from './deals.js';
 import deliveryOrderRoutes from './deliveryOrders.js';
 import departmentRoutes from './departments.js';
@@ -26,6 +27,7 @@ export default function setRoutes(app: Express): void {
   app.use('/api/admin/deals', adminDealRoutes);
   app.use('/api/banners', bannerRoutes);
   app.use('/api/blog-articles', blogArticleRoutes);
+  app.use('/api/contact', contactRoutes);
   app.use('/api/deals', dealRoutes);
   app.use('/api/admin/orders', adminOrderRoutes);
   app.use('/api/admin/payment-methods', adminPaymentMethodRoutes);

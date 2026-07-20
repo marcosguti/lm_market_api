@@ -10,6 +10,7 @@ const userQueryMocks = vi.hoisted(() => ({
   findUserByPhone: vi.fn(),
   listUsersPaginated: vi.fn(),
   updateUser: vi.fn(),
+  updateUserByAdmin: vi.fn(),
   updateUserPassword: vi.fn(),
 }));
 
@@ -81,6 +82,7 @@ vi.mock('../../../queries/user.js', async (importOriginal) => {
     findUserByPhone: userQueryMocks.findUserByPhone,
     listUsersPaginated: userQueryMocks.listUsersPaginated,
     updateUser: userQueryMocks.updateUser,
+    updateUserByAdmin: userQueryMocks.updateUserByAdmin,
     updateUserPassword: userQueryMocks.updateUserPassword,
   };
 });
@@ -190,6 +192,23 @@ export function resetQueryMocks(): void {
     password: 'hash',
     address: null,
     phone: null,
+    storeId: null,
+    emailVerified: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  userQueryMocks.updateUserByAdmin.mockResolvedValue({
+    id: 'u1',
+    type: 'client',
+    email: 'client@test.com',
+    firstName: 'Updated',
+    lastName: 'User',
+    numberId: 'V12345678',
+    numberIdType: 'V',
+    password: 'hash',
+    address: null,
+    phone: null,
+    storeId: null,
     emailVerified: true,
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -205,6 +224,7 @@ export function resetQueryMocks(): void {
     password: 'hash',
     address: null,
     phone: null,
+    storeId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   });

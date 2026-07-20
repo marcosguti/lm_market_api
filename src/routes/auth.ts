@@ -2,10 +2,12 @@ import { Router } from 'express';
 
 import {
   changePassword,
+  deletePushToken,
   getMe,
   login,
   logout,
   putDeliveryAddress,
+  putPushToken,
   refresh,
   register,
   requestPasswordReset,
@@ -34,8 +36,10 @@ router.post('/verify-email', verifyEmail);
 router.post('/refresh', refresh);
 
 router.get('/me', requireAuth, getMe);
-router.patch('/cuenta', requireAuth, updateProfile);
+router.patch('/profile', requireAuth, updateProfile);
 router.put('/delivery-address', requireAuth, putDeliveryAddress);
-router.post('/cambiar-password', requireAuth, changePassword);
+router.put('/push-token', requireAuth, putPushToken);
+router.delete('/push-token', requireAuth, deletePushToken);
+router.post('/change-password', requireAuth, changePassword);
 
 export default router;

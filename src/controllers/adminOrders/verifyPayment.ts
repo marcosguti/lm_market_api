@@ -2,8 +2,12 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
-import { notifyOrderPaid } from '../../services/orderService.js';
-import { getParam } from '../shared/orderHttp.js';
+import {
+  assertAdminCanAccessOrder,
+  getAnyOrderById,
+  notifyOrderPaid,
+} from '../../services/orderService.js';
+import { getParam, handleOrderError } from '../shared/orderHttp.js';
 
 export async function verifyPayment(req: AuthRequest, res: Response): Promise<void> {
   if (!req.userId) {
@@ -24,6 +28,13 @@ export async function verifyPayment(req: AuthRequest, res: Response): Promise<vo
   }
 
   try {
+    const before = await getAnyOrderById(orderId);
+    if (!before) {
+      res.status(404).json({ error: 'Pedido no encontrado' });
+      return;
+    }
+    assertAdminCanAccessOrder(req.userType, req.storeId, before);
+
     const { verifyPaymentByAdmin } = await import('../../services/orderService.js');
     const order = await verifyPaymentByAdmin(orderId, req.userId, verify);
     if (verify) {
@@ -31,7 +42,6 @@ export async function verifyPayment(req: AuthRequest, res: Response): Promise<vo
     }
     res.json({ order });
   } catch (err) {
-    const { handleOrderError } = await import('../shared/orderHttp.js');
     handleOrderError(err, res);
   }
 }

@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import type { AuthRequest } from '../../middlewares/auth.js';
 
 import { createHash } from '../../libs/passwordHashing.js';
+import { assertStoreActive, StoreNotFoundError } from '../../queries/store.js';
 import {
   createUser,
   findUserByEmail,
@@ -19,6 +20,35 @@ export async function createAdminUser(req: AuthRequest, res: Response): Promise<
     return;
   }
   const body = validation.value;
+  const isSuper = req.userType === 'superAdmin';
+
+  if (body.type === 'admin' && !isSuper) {
+    res.status(403).json({ error: 'Acceso denegado' });
+    return;
+  }
+  if (body.storeId !== undefined && body.storeId !== null && !isSuper) {
+    res.status(403).json({ error: 'Acceso denegado' });
+    return;
+  }
+
+  let storeId: null | string = null;
+  if (needsStore(body.type)) {
+    if (isSuper) {
+      if (!body.storeId) {
+        res.status(400).json({ error: '"storeId" is required' });
+        return;
+      }
+      storeId = body.storeId as string;
+    } else {
+      // Admin creating deliveryDriver: store comes only from authenticated admin.
+      if (!req.storeId) {
+        res.status(403).json({ error: 'Acceso denegado' });
+        return;
+      }
+      storeId = req.storeId;
+    }
+  }
+
   const existingEmail = await findUserByEmail(body.email);
   if (existingEmail) {
     res.status(409).json({ error: 'Email ya registrado' });
@@ -37,6 +67,18 @@ export async function createAdminUser(req: AuthRequest, res: Response): Promise<
     }
   }
 
+  if (storeId) {
+    try {
+      await assertStoreActive(storeId);
+    } catch (err) {
+      if (err instanceof StoreNotFoundError) {
+        res.status(err.statusCode).json({ code: err.code, error: err.message });
+        return;
+      }
+      throw err;
+    }
+  }
+
   const useDefaultPassword = body.password === undefined || body.password === '';
   const plainPassword = useDefaultPassword ? DEFAULT_TEMP_PASSWORD : body.password;
   const hashedPassword = await createHash(plainPassword);
@@ -52,6 +94,7 @@ export async function createAdminUser(req: AuthRequest, res: Response): Promise<
       numberIdType: body.numberIdType,
       password: hashedPassword,
       phone: body.phone || undefined,
+      storeId,
       type: body.type,
     });
     res.status(201).json({
@@ -65,4 +108,8 @@ export async function createAdminUser(req: AuthRequest, res: Response): Promise<
     }
     throw err;
   }
+}
+
+function needsStore(type: string): boolean {
+  return type === 'admin' || type === 'deliveryDriver';
 }

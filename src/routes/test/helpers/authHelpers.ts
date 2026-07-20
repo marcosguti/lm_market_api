@@ -12,11 +12,18 @@ vi.mock('../../../libs/jwt.js', () => ({
   verifyToken: authMocks.verifyToken,
 }));
 
-export function mockAuthenticatedUser(userId: string, userType: UserType): void {
+export function mockAuthenticatedUser(
+  userId: string,
+  userType: UserType,
+  options: { storeId?: null | string } = {},
+): void {
+  const storeId =
+    options.storeId !== undefined ? options.storeId : userType === 'admin' ? 'store-1' : null;
   authMocks.verifyToken.mockReturnValue({ userId });
   authMocks.findUserById.mockResolvedValue({
     id: userId,
     type: userType,
+    storeId,
     email: `${userType}@test.com`,
     firstName: 'Test',
     lastName: 'User',

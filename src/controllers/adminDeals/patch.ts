@@ -7,7 +7,12 @@ import type { AuthRequest } from '../../middlewares/auth.js';
 import { uploadDealImage } from '../../libs/filesInDigitalOcean/index.js';
 import { getDealById, updateDeal } from '../../services/dealService.js';
 import { getParam } from '../shared/orderHttp.js';
-import { parseDealDate, updateDealSchema, validateDealDateRange } from './schemas.js';
+import {
+  parseDealDate,
+  parseMultipartBoolean,
+  updateDealSchema,
+  validateDealDateRange,
+} from './schemas.js';
 
 export async function patchAdminDeal(req: AuthRequest, res: Response): Promise<void> {
   const id = getParam(req.params.id);
@@ -22,13 +27,15 @@ export async function patchAdminDeal(req: AuthRequest, res: Response): Promise<v
     return;
   }
 
-  const { description, endDate, startDate } = req.body as {
+  const { active, description, endDate, startDate } = req.body as {
+    active?: string;
     description?: string;
     endDate?: string;
     startDate?: string;
   };
 
   const validation = updateDealSchema.validate({
+    active: parseMultipartBoolean(active),
     description: description ?? undefined,
     endDate: endDate ? parseDealDate(endDate) : undefined,
     startDate: startDate ? parseDealDate(startDate) : undefined,
@@ -59,12 +66,16 @@ export async function patchAdminDeal(req: AuthRequest, res: Response): Promise<v
     }
 
     const updateData: {
+      active?: boolean;
       description?: null | string;
       endDate?: Date;
       imageUrl?: string;
       startDate?: Date;
     } = {};
 
+    if (validation.value.active !== undefined) {
+      updateData.active = validation.value.active;
+    }
     if (validation.value.description !== undefined) {
       updateData.description = validation.value.description;
     }

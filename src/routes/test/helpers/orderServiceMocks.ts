@@ -9,6 +9,7 @@ const orderMocks = vi.hoisted(() => ({
   getAnyOrderById: vi.fn(),
   getOrderByIdForUser: vi.fn(),
   getUserOrderHistory: vi.fn(),
+  listDeliveryDriversForOrder: vi.fn(),
   listDeliveryMine: vi.fn(),
   listKitchenOrders: vi.fn(),
   listNotificationsForUser: vi.fn(),
@@ -16,7 +17,10 @@ const orderMocks = vi.hoisted(() => ({
   markAllNotificationsAsRead: vi.fn(),
   markNotificationAsRead: vi.fn(),
   markOrderDelivered: vi.fn(),
+  notifyDeliveryAssigned: vi.fn(),
+  notifyDeliveryCancelled: vi.fn(),
   notifyOrderPaid: vi.fn(),
+  notifyOrderStatusChange: vi.fn(),
   startOrderDelivering: vi.fn(),
   unassignOrderFromDelivery: vi.fn(),
   updatePendingOrderLines: vi.fn(),
@@ -36,6 +40,7 @@ vi.mock('../../../services/orderService.js', async (importOriginal) => {
     getAnyOrderById: orderMocks.getAnyOrderById,
     getOrderByIdForUser: orderMocks.getOrderByIdForUser,
     getUserOrderHistory: orderMocks.getUserOrderHistory,
+    listDeliveryDriversForOrder: orderMocks.listDeliveryDriversForOrder,
     listDeliveryMine: orderMocks.listDeliveryMine,
     listKitchenOrders: orderMocks.listKitchenOrders,
     listNotificationsForUser: orderMocks.listNotificationsForUser,
@@ -43,7 +48,10 @@ vi.mock('../../../services/orderService.js', async (importOriginal) => {
     markAllNotificationsAsRead: orderMocks.markAllNotificationsAsRead,
     markNotificationAsRead: orderMocks.markNotificationAsRead,
     markOrderDelivered: orderMocks.markOrderDelivered,
+    notifyDeliveryAssigned: orderMocks.notifyDeliveryAssigned,
+    notifyDeliveryCancelled: orderMocks.notifyDeliveryCancelled,
     notifyOrderPaid: orderMocks.notifyOrderPaid,
+    notifyOrderStatusChange: orderMocks.notifyOrderStatusChange,
     startOrderDelivering: orderMocks.startOrderDelivering,
     unassignOrderFromDelivery: orderMocks.unassignOrderFromDelivery,
     updatePendingOrderLines: orderMocks.updatePendingOrderLines,
@@ -63,6 +71,7 @@ vi.mock('../../../libs/filesInDigitalOcean/index.js', () => ({
 const sampleOrder = {
   id: 'o1',
   status: 'pending',
+  storeId: 'store-1',
   userId: 'u1',
   products: [],
   totalAmount: 0,
@@ -79,6 +88,7 @@ export function resetOrderServiceMocks(): void {
   });
   orderMocks.verifyMobilePaymentP2c.mockResolvedValue({ order: { id: 'o1', status: 'paid' } });
   orderMocks.listKitchenOrders.mockResolvedValue({ data: [], page: 1, pageSize: 20, total: 0 });
+  orderMocks.listDeliveryDriversForOrder.mockResolvedValue([]);
   orderMocks.listDeliveryMine.mockResolvedValue({ data: [], page: 1, pageSize: 20, total: 0 });
   orderMocks.assignOrderToDelivery.mockResolvedValue({
     ...sampleOrder,
@@ -95,6 +105,9 @@ export function resetOrderServiceMocks(): void {
   orderMocks.verifyPaymentByAdmin.mockResolvedValue({ ...sampleOrder, status: 'paid' });
   orderMocks.listOrderStatusHistory.mockResolvedValue([]);
   orderMocks.createOrderStatusNotification.mockResolvedValue(undefined);
+  orderMocks.notifyOrderStatusChange.mockResolvedValue(undefined);
+  orderMocks.notifyDeliveryAssigned.mockResolvedValue(undefined);
+  orderMocks.notifyDeliveryCancelled.mockResolvedValue(undefined);
   orderMocks.notifyOrderPaid.mockResolvedValue(undefined);
   orderMocks.listNotificationsForUser.mockResolvedValue({
     data: [],

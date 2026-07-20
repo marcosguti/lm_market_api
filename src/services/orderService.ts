@@ -10,6 +10,11 @@ import type {
 import { Prisma, PrismaClient } from '@prisma/client';
 
 import { megasoftConfig, resolveMegasoftAmount } from '../config/megasoft.js';
+import { sendPushToUser } from '../libs/fcm/index.js';
+import {
+  assertAdminCanAccessOrder as assertAdminCanAccessOrderScope,
+  StoreScopeError,
+} from '../middlewares/storeScope.js';
 import prisma from '../prisma.js';
 import { emitKitchenNewPaid, emitOrderUpdated, emitUserNotification } from '../realtime/socket.js';
 import { startOfBusinessDayCaracas, startOfNextBusinessDayCaracas } from '../utils/businessDay.js';
@@ -83,6 +88,21 @@ export class OrderDomainError extends Error {
   }
 }
 
+export function assertAdminCanAccessOrder(
+  actorType: undefined | UserType,
+  actorStoreId: null | string | undefined,
+  order: { storeId: null | string },
+): void {
+  try {
+    assertAdminCanAccessOrderScope(actorType, actorStoreId, order);
+  } catch (err) {
+    if (err instanceof StoreScopeError) {
+      throw new OrderDomainError(err.code, err.message, err.statusCode);
+    }
+    throw err;
+  }
+}
+
 const client = prisma as PrismaClient;
 
 export interface ConfirmPaymentDetails {
@@ -94,6 +114,15 @@ export interface ConfirmPaymentDetails {
   paidAt?: Date | null;
   reference?: null | string;
   screenshotUrl?: null | string;
+}
+
+export interface DeliveryDriverForAssign {
+  busy: boolean;
+  email: string;
+  firstName: string;
+  id: string;
+  lastName: string;
+  storeId: null | string;
 }
 
 export interface KitchenOrdersFilters {
@@ -203,6 +232,23 @@ export async function assignOrderToDelivery(
         'Solo se pueden asignar órdenes listas para reparto',
         400,
       );
+    }
+    if (!order.storeId || driver.storeId !== order.storeId) {
+      throw new OrderDomainError(
+        'DRIVER_STORE_MISMATCH',
+        'El repartidor no pertenece a la sede de la orden',
+        400,
+      );
+    }
+
+    const busyCount = await tx.order.count({
+      where: {
+        deliveryUserId: driver.id,
+        status: { in: ['assignedToDeliveryDriver', 'delivering'] },
+      },
+    });
+    if (busyCount > 0) {
+      throw new OrderDomainError('DRIVER_BUSY', 'El repartidor ya tiene una orden en curso', 409);
     }
 
     const result = await tx.order.updateMany({
@@ -528,6 +574,7 @@ export async function createOrderStatusNotification(
         newStatus: order.status,
         orderId: order.id,
         previousStatus,
+        route: '/mis-compras',
       },
       title: 'Actualización de orden',
       type: 'ORDER_STATUS_CHANGED',
@@ -642,6 +689,56 @@ export async function getUserOrderHistory(
     total,
     totalPages: Math.ceil(total / pageSize) || 1,
   };
+}
+
+export async function listDeliveryDriversForOrder(
+  orderId: string,
+): Promise<DeliveryDriverForAssign[]> {
+  const order = await client.order.findUnique({
+    select: { id: true, storeId: true },
+    where: { id: orderId },
+  });
+  if (!order) {
+    throw new OrderDomainError('ORDER_NOT_FOUND', 'Pedido no encontrado', 404);
+  }
+  if (!order.storeId) {
+    return [];
+  }
+
+  const drivers = await client.user.findMany({
+    orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+    select: {
+      email: true,
+      firstName: true,
+      id: true,
+      lastName: true,
+      storeId: true,
+    },
+    where: { storeId: order.storeId, type: 'deliveryDriver' },
+  });
+
+  if (drivers.length === 0) return [];
+
+  const busyRows = await client.order.findMany({
+    distinct: ['deliveryUserId'],
+    select: { deliveryUserId: true },
+    where: {
+      deliveryUserId: { in: drivers.map((d) => d.id) },
+      status: { in: ['assignedToDeliveryDriver', 'delivering'] },
+    },
+  });
+  const busyIds = new Set(
+    busyRows.map((row) => row.deliveryUserId).filter((id): id is string => Boolean(id)),
+  );
+
+  return drivers.map((driver) => ({
+    busy: busyIds.has(driver.id),
+    email: driver.email,
+    firstName: driver.firstName,
+    id: driver.id,
+    lastName: driver.lastName,
+    storeId: driver.storeId,
+  }));
 }
 
 export async function listDeliveryMine(
@@ -919,26 +1016,126 @@ export async function markOrderDelivered(
   });
 }
 
+/** Inbox + socket + FCM when a driver is assigned a delivery. */
+export async function notifyDeliveryAssigned(
+  order: OrderWithLines,
+  deliveryUserId: string,
+): Promise<void> {
+  const title = 'Nuevo reparto';
+  const body = `Se te asignó el pedido ${shortOrderRef(order.id)}`;
+  await client.notification.create({
+    data: {
+      body,
+      orderId: order.id,
+      payload: {
+        orderId: order.id,
+        route: '/reparto',
+        status: order.status,
+      },
+      title,
+      type: 'DELIVERY_ASSIGNED',
+      userId: deliveryUserId,
+    },
+  });
+  emitUserNotification(deliveryUserId, {
+    body,
+    orderId: order.id,
+    route: '/reparto',
+    status: order.status,
+    title,
+    type: 'DELIVERY_ASSIGNED',
+  });
+  await sendPushToUser(deliveryUserId, {
+    body,
+    data: {
+      orderId: order.id,
+      route: '/reparto',
+      type: 'DELIVERY_ASSIGNED',
+    },
+    title,
+  });
+}
+
+/** Inbox + socket + FCM when a driver's assignment is cancelled / unassigned. */
+export async function notifyDeliveryCancelled(
+  orderId: string,
+  deliveryUserId: string,
+): Promise<void> {
+  const title = 'Reparto cancelado';
+  const body = `Se canceló o reasignó el pedido ${shortOrderRef(orderId)}`;
+  await client.notification.create({
+    data: {
+      body,
+      orderId,
+      payload: {
+        orderId,
+        route: '/reparto',
+      },
+      title,
+      type: 'DELIVERY_CANCELLED',
+      userId: deliveryUserId,
+    },
+  });
+  emitUserNotification(deliveryUserId, {
+    body,
+    orderId,
+    route: '/reparto',
+    title,
+    type: 'DELIVERY_CANCELLED',
+  });
+  await sendPushToUser(deliveryUserId, {
+    body,
+    data: {
+      orderId,
+      route: '/reparto',
+      type: 'DELIVERY_CANCELLED',
+    },
+    title,
+  });
+}
+
 export async function notifyOrderPaid(
   order: OrderWithLines,
   previousStatus: OrderStatus = 'pending',
 ): Promise<void> {
-  await createOrderStatusNotification(order, previousStatus);
-  emitUserNotification(order.userId, {
-    body: formatOrderStatusChangeBody(previousStatus, order.status),
-    newStatus: order.status,
-    orderId: order.id,
-    previousStatus,
-    status: order.status,
-    title: 'Actualización de orden',
-    type: 'ORDER_STATUS_CHANGED',
-  });
+  await notifyOrderStatusChange(order, previousStatus);
   emitOrderUpdated(order.userId, {
     id: order.id,
     status: order.status,
     totalAmount: order.totalAmount,
   });
   emitKitchenNewPaid(order);
+}
+
+/** DB inbox + socket + FCM for the order owner (client). */
+export async function notifyOrderStatusChange(
+  order: OrderWithLines,
+  previousStatus: OrderStatus,
+): Promise<void> {
+  await createOrderStatusNotification(order, previousStatus);
+  const body = formatOrderStatusChangeBody(previousStatus, order.status);
+  const title = 'Actualización de orden';
+  emitUserNotification(order.userId, {
+    body,
+    newStatus: order.status,
+    orderId: order.id,
+    previousStatus,
+    route: '/mis-compras',
+    status: order.status,
+    title,
+    type: 'ORDER_STATUS_CHANGED',
+  });
+  await sendPushToUser(order.userId, {
+    body,
+    data: {
+      newStatus: String(order.status),
+      orderId: order.id,
+      previousStatus: String(previousStatus),
+      route: '/mis-compras',
+      type: 'ORDER_STATUS_CHANGED',
+    },
+    title,
+  });
 }
 
 export async function startOrderDelivering(
@@ -1396,6 +1593,11 @@ async function applyStoreIdToPendingOrder(
     data: { storeId },
     where: { id: order.id },
   });
+}
+
+function shortOrderRef(orderId: string): string {
+  const segment = orderId.split('-')[0]?.trim() || orderId.trim();
+  return `#${segment}`;
 }
 
 const CANCELLABLE_STATUSES: OrderStatus[] = [

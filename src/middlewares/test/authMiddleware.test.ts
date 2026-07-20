@@ -40,14 +40,15 @@ describe('authMiddleware', () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  it('sets userId and userType when token and user are valid', async () => {
+  it('sets userId, userType and storeId when token and user are valid', async () => {
     verifyToken.mockReturnValue({ userId: 'u1' });
-    findUserById.mockResolvedValue({ id: 'u1', type: 'client' });
+    findUserById.mockResolvedValue({ id: 'u1', storeId: 'store-1', type: 'admin' });
     const req = { headers: { authorization: 'Bearer valid-token' } } as AuthRequest;
     const next = mockNext();
     await authMiddleware(req, {} as Response, next);
     expect(req.userId).toBe('u1');
-    expect(req.userType).toBe('client');
+    expect(req.userType).toBe('admin');
+    expect(req.storeId).toBe('store-1');
     expect(next).toHaveBeenCalledTimes(1);
   });
 

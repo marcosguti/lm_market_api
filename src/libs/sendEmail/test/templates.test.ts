@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { LOGO_CONTENT_ID } from '../logo.js';
 import { BRAND } from '../templates/common.js';
+import { getContactMessageTemplate } from '../templates/contactMessage.js';
 import { getEmailVerificationTemplate } from '../templates/emailVerification.js';
 import { getLoginCodeTemplate } from '../templates/loginCode.js';
 import { getOrderCancelledTemplate } from '../templates/orderCancelled.js';
@@ -26,14 +27,14 @@ describe('email templates', () => {
   it('password reset template uses brand primary button and link', () => {
     const html = getPasswordResetTemplate({
       firstName: 'Ana',
-      resetUrl: 'https://www.lmmarket.com/restablecer-password?token=abc',
+      resetUrl: 'https://www.lmmarket.com/restablecer-contrasena?token=abc',
       ttlHours: 1,
     });
 
     expect(html).toContain(BRAND.primary);
     expect(html).toContain('Restablecer contraseña');
     expect(html).toContain('Hola Ana');
-    expect(html).toContain('https://www.lmmarket.com/restablecer-password?token=abc');
+    expect(html).toContain('https://www.lmmarket.com/restablecer-contrasena?token=abc');
     expect(html).toContain(`src="cid:${LOGO_CONTENT_ID}"`);
   });
 
@@ -70,6 +71,25 @@ describe('email templates', () => {
     expect(html).toContain('#a5350180');
     expect(html).toContain('Motivo de cancelación');
     expect(html).toContain('Producto agotado &lt;script&gt;');
+    expect(html).not.toContain('<script>');
+    expect(html).toContain(`src="cid:${LOGO_CONTENT_ID}"`);
+  });
+
+  it('contact message template includes fields and escapes HTML', () => {
+    const html = getContactMessageTemplate({
+      area: 'soporte',
+      email: 'user@test.com',
+      message: 'Hola <script>alert(1)</script>',
+      name: 'Ana <b>X</b>',
+      subject: 'Ayuda con pedido',
+    });
+
+    expect(html).toContain(BRAND.primary);
+    expect(html).toContain('Soporte');
+    expect(html).toContain('user@test.com');
+    expect(html).toContain('Ayuda con pedido');
+    expect(html).toContain('Ana &lt;b&gt;X&lt;/b&gt;');
+    expect(html).toContain('Hola &lt;script&gt;alert(1)&lt;/script&gt;');
     expect(html).not.toContain('<script>');
     expect(html).toContain(`src="cid:${LOGO_CONTENT_ID}"`);
   });

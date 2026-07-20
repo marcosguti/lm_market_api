@@ -1,4 +1,4 @@
-import { type DeliveryCitySlug, normalizeDeliveryCity } from '../config/delivery.js';
+import { type DeliveryCitySlug, resolveDeliveryCityFromPlaceTexts } from '../config/delivery.js';
 
 export interface ReverseGeocodeResult {
   address: string;
@@ -7,6 +7,7 @@ export interface ReverseGeocodeResult {
 
 interface MapboxGeocodeFeature {
   context?: Array<{ id?: string; text?: string }>;
+  id?: string;
   place_name?: string;
   text?: string;
 }
@@ -16,6 +17,8 @@ interface MapboxGeocodeResponse {
   message?: string;
 }
 
+const PLACE_LEVEL_PREFIXES = ['place.', 'locality.', 'district.', 'neighborhood.'] as const;
+
 export class MapboxGeocodingError extends Error {
   constructor(
     message: string,
@@ -24,6 +27,26 @@ export class MapboxGeocodingError extends Error {
     super(message);
     this.name = 'MapboxGeocodingError';
   }
+}
+
+/** Collect place/locality/district/neighborhood labels; ignore region/country. */
+export function extractPlaceLevelTexts(feature: MapboxGeocodeFeature): string[] {
+  const texts: string[] = [];
+  if (isPlaceLevelId(feature.id) && feature.text?.trim()) {
+    texts.push(feature.text.trim());
+  }
+  for (const entry of feature.context ?? []) {
+    if (isPlaceLevelId(entry.id) && entry.text?.trim()) {
+      texts.push(entry.text.trim());
+    }
+  }
+  return texts;
+}
+
+export function resolveCityFromGeocodeFeature(
+  feature: MapboxGeocodeFeature,
+): DeliveryCitySlug | null {
+  return resolveDeliveryCityFromPlaceTexts(extractPlaceLevelTexts(feature));
 }
 
 export async function reverseGeocodeDeliveryPin(params: {
@@ -55,20 +78,9 @@ export async function reverseGeocodeDeliveryPin(params: {
     throw new MapboxGeocodingError('No se pudo resolver la dirección del pin', 422);
   }
 
-  const candidates = [
-    feature.place_name,
-    feature.text,
-    ...(feature.context ?? []).map((c) => c.text),
-  ].filter((v): v is string => Boolean(v && v.trim()));
-
-  let city: DeliveryCitySlug | null = null;
-  for (const candidate of candidates) {
-    city = normalizeDeliveryCity(candidate);
-    if (city) break;
-  }
-
+  const city = resolveCityFromGeocodeFeature(feature);
   if (!city) {
-    throw new MapboxGeocodingError('La ubicación debe estar en Mérida o Tovar', 422);
+    throw new MapboxGeocodingError('La ubicación debe estar dento de la ciudad de la tienda', 422);
   }
 
   const address = feature.place_name?.trim() || feature.text?.trim();
@@ -77,4 +89,9 @@ export async function reverseGeocodeDeliveryPin(params: {
   }
 
   return { address, city };
+}
+
+function isPlaceLevelId(id: string | undefined): boolean {
+  if (!id) return false;
+  return PLACE_LEVEL_PREFIXES.some((prefix) => id.startsWith(prefix));
 }

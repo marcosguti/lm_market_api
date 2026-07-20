@@ -88,6 +88,24 @@ describe('putDeliveryAddress', () => {
     expect((res.body as { user: { password?: string } }).user.password).toBeUndefined();
   });
 
+  it('rejects when pin is outside expectedCity bounds before geocode', async () => {
+    const res = mockRes();
+    await putDeliveryAddress(
+      {
+        body: { expectedCity: 'merida', latitude: 8.51, longitude: -71.39 },
+        userId: 'u1',
+      } as AuthRequest,
+      res,
+    );
+    expect(res.statusCode).toBe(422);
+    expect(res.body).toEqual({
+      code: 'ADDRESS_OUT_OF_BOUNDS',
+      error: 'La ubicación está fuera del área de entrega de la ciudad seleccionada',
+    });
+    expect(reverseGeocodeDeliveryPin).not.toHaveBeenCalled();
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
   it('rejects when geocoded city mismatches expectedCity', async () => {
     reverseGeocodeDeliveryPin.mockResolvedValue({
       address: 'Centro, Tovar',
@@ -96,7 +114,7 @@ describe('putDeliveryAddress', () => {
     const res = mockRes();
     await putDeliveryAddress(
       {
-        body: { expectedCity: 'merida', latitude: 8.33, longitude: -71.75 },
+        body: { expectedCity: 'merida', latitude: 8.59, longitude: -71.15 },
         userId: 'u1',
       } as AuthRequest,
       res,
@@ -105,6 +123,27 @@ describe('putDeliveryAddress', () => {
     expect(res.body).toEqual({
       code: 'ADDRESS_CITY_MISMATCH',
       error: 'La ubicación debe estar en la ciudad de la tienda seleccionada',
+    });
+    expect(updateUser).not.toHaveBeenCalled();
+  });
+
+  it('rejects when geocoded city bounds do not contain the pin', async () => {
+    reverseGeocodeDeliveryPin.mockResolvedValue({
+      address: 'Sucre, Mérida, Venezuela',
+      city: 'merida',
+    });
+    const res = mockRes();
+    await putDeliveryAddress(
+      {
+        body: { latitude: 8.51, longitude: -71.39 },
+        userId: 'u1',
+      } as AuthRequest,
+      res,
+    );
+    expect(res.statusCode).toBe(422);
+    expect(res.body).toEqual({
+      code: 'ADDRESS_OUT_OF_BOUNDS',
+      error: 'La ubicación está fuera del área de entrega de esa ciudad',
     });
     expect(updateUser).not.toHaveBeenCalled();
   });

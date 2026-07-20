@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "lm-market-api-collection-2026",
     "name": "LM Market API",
-    "description": "Colección completa de la API de LM Market (supermercado). 46 endpoints organizados en 11 categorías. Importar y configurar las variables de colección antes de usar.",
+    "description": "Colección completa de la API de LM Market (supermercado). Endpoints organizados por categoría. Importar y configurar las variables de colección antes de usar.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -185,9 +185,9 @@
               "raw": "{\n  \"firstName\": \"Juan Carlos\",\n  \"lastName\": \"Pérez\",\n  \"phone\": \"+584129999999\",\n  \"address\": \"Avenida Principal, Tovar\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/auth/cuenta",
+              "raw": "{{baseUrl}}/api/auth/profile",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "cuenta"]
+              "path": ["api", "auth", "profile"]
             }
           }
         },
@@ -204,9 +204,30 @@
               "raw": "{\n  \"currentPassword\": \"MiPass123\",\n  \"newPassword\": \"NewPass123\"\n}"
             },
             "url": {
-              "raw": "{{baseUrl}}/api/auth/cambiar-password",
+              "raw": "{{baseUrl}}/api/auth/change-password",
               "host": ["{{baseUrl}}"],
-              "path": ["api", "auth", "cambiar-password"]
+              "path": ["api", "auth", "change-password"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Contact",
+      "item": [
+        {
+          "name": "Send Contact Message",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"area\": \"soporte\",\n  \"name\": \"Juan Pérez\",\n  \"email\": \"cliente@example.com\",\n  \"subject\": \"Consulta sobre mi pedido\",\n  \"message\": \"Hola, necesito ayuda con el seguimiento de mi pedido.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/contact",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "contact"]
             }
           }
         }

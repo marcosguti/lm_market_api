@@ -69,6 +69,24 @@ describe('adminDeals controllers', () => {
       expect(res.statusCode).toBe(200);
       expect(updateDeal).toHaveBeenCalled();
     });
+
+    it('updates deal active flag', async () => {
+      getDealById.mockResolvedValue({
+        id: 'd1',
+        imageUrl: 'old.jpg',
+        startDate: new Date(),
+        endDate: new Date(),
+      });
+      updateDeal.mockResolvedValue({ id: 'd1', active: false });
+      const req = {
+        params: { id: 'd1' },
+        body: { active: 'false' },
+      } as unknown as AuthRequest;
+      const res = mockRes();
+      await patchAdminDeal(req, res);
+      expect(res.statusCode).toBe(200);
+      expect(updateDeal).toHaveBeenCalledWith('d1', { active: false });
+    });
   });
 
   describe('deleteAdminDeal', () => {

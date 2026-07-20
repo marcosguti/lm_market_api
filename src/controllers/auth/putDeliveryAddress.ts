@@ -2,6 +2,7 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { isDeliveryCitySlug, isInsideDeliveryCityBounds } from '../../config/delivery.js';
 import { MapboxGeocodingError, reverseGeocodeDeliveryPin } from '../../libs/mapboxGeocoding.js';
 import { updateUser } from '../../queries/user.js';
 import { putDeliveryAddressSchema } from './schemas.js';
@@ -20,12 +21,29 @@ export async function putDeliveryAddress(req: AuthRequest, res: Response): Promi
 
   const { expectedCity, latitude, longitude } = validation.value;
 
+  if (expectedCity && isDeliveryCitySlug(expectedCity)) {
+    if (!isInsideDeliveryCityBounds(expectedCity, latitude, longitude)) {
+      res.status(422).json({
+        code: 'ADDRESS_OUT_OF_BOUNDS',
+        error: 'La ubicación está fuera del área de entrega de la ciudad seleccionada',
+      });
+      return;
+    }
+  }
+
   try {
     const geocoded = await reverseGeocodeDeliveryPin({ latitude, longitude });
     if (expectedCity && geocoded.city !== expectedCity) {
       res.status(422).json({
         code: 'ADDRESS_CITY_MISMATCH',
         error: 'La ubicación debe estar en la ciudad de la tienda seleccionada',
+      });
+      return;
+    }
+    if (!isInsideDeliveryCityBounds(geocoded.city, latitude, longitude)) {
+      res.status(422).json({
+        code: 'ADDRESS_OUT_OF_BOUNDS',
+        error: 'La ubicación está fuera del área de entrega de esa ciudad',
       });
       return;
     }

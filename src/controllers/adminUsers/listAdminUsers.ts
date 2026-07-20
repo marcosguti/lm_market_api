@@ -18,6 +18,7 @@ export async function listAdminUsers(req: AuthRequest, res: Response): Promise<v
   }
   const { page, pageSize, search } = validation.value;
   const { data, total } = await listUsersPaginated({
+    actorStoreId: req.storeId,
     actorType: req.userType,
     page,
     pageSize,

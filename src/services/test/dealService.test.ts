@@ -30,6 +30,11 @@ describe('dealService', () => {
     prismaMock.deal.findMany.mockResolvedValue([{ imageUrl: 'https://deal.test/1.jpg' }]);
     const result = await getActiveDeals();
     expect(result).toEqual(['https://deal.test/1.jpg']);
+    expect(prismaMock.deal.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ active: true }),
+      }),
+    );
   });
 
   it('createDeal delegates to prisma', async () => {

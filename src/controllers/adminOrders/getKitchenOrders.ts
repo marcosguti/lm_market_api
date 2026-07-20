@@ -15,16 +15,32 @@ export async function getKitchenOrders(req: AuthRequest, res: Response): Promise
   }
   try {
     const { createdFrom, createdTo, id, page, pageSize, status, storeId } = validation.value;
-    if (storeId) {
-      await assertStoreActive(storeId);
-    }
     const userType = req.userType!;
+
+    let effectiveStoreId: string | undefined;
+    if (userType === 'admin') {
+      if (!req.storeId) {
+        res.json({
+          data: [],
+          page,
+          pageSize,
+          total: 0,
+          totalPages: 0,
+        });
+        return;
+      }
+      effectiveStoreId = req.storeId;
+    } else if (storeId) {
+      await assertStoreActive(storeId);
+      effectiveStoreId = storeId;
+    }
+
     const result = await listKitchenOrders(page, pageSize, userType, {
       createdFrom,
       createdTo,
       id: id || undefined,
       status,
-      storeId: storeId || undefined,
+      storeId: effectiveStoreId,
     });
     res.json(result);
   } catch (err) {

@@ -2,14 +2,10 @@ import type { Response } from 'express';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AuthRequest } from '../../../middlewares/auth.js';
-import {
-  emitKitchenOrderUpdated,
-  emitOrderUpdated,
-  emitUserNotification,
-} from '../../../realtime/socket.js';
+import { emitKitchenOrderUpdated, emitOrderUpdated } from '../../../realtime/socket.js';
 import { startDeliveryOrder } from '../startOrderDelivering.js';
 
-const createOrderStatusNotification = vi.fn();
+const notifyOrderStatusChange = vi.fn();
 const getAnyOrderById = vi.fn();
 const startOrderDelivering = vi.fn();
 
@@ -20,8 +16,8 @@ vi.mock('../../../realtime/socket.js', () => ({
 }));
 
 vi.mock('../../../services/orderService.js', () => ({
-  createOrderStatusNotification: (...args: unknown[]) => createOrderStatusNotification(...args),
   getAnyOrderById: (...args: unknown[]) => getAnyOrderById(...args),
+  notifyOrderStatusChange: (...args: unknown[]) => notifyOrderStatusChange(...args),
   startOrderDelivering: (...args: unknown[]) => startOrderDelivering(...args),
 }));
 
@@ -58,7 +54,7 @@ describe('startDeliveryOrder controller', () => {
       deliveryUserId: 'driver-1',
       totalAmount: 25,
     });
-    createOrderStatusNotification.mockResolvedValue(undefined);
+    notifyOrderStatusChange.mockResolvedValue(undefined);
   });
 
   it('emits order:updated to client, kitchen and assigned driver', async () => {
@@ -73,9 +69,9 @@ describe('startDeliveryOrder controller', () => {
 
     expect(res.statusCode).toBe(200);
     const payload = { id: 'o1', status: 'delivering', totalAmount: 25 };
+    expect(notifyOrderStatusChange).toHaveBeenCalled();
     expect(emitOrderUpdated).toHaveBeenCalledWith('client-1', payload);
     expect(emitKitchenOrderUpdated).toHaveBeenCalledWith(payload);
     expect(emitOrderUpdated).toHaveBeenCalledWith('driver-1', payload);
-    expect(emitUserNotification).toHaveBeenCalled();
   });
 });

@@ -9,15 +9,15 @@ import {
   emitDeliveryOrderCancelled,
   emitOrderCancelled,
   emitOrderUpdated,
-  emitUserNotification,
 } from '../../realtime/socket.js';
 import { endDeliveryTrackingAndNotify } from '../../services/orderDeliveryTrackingService.js';
 import {
   adminSetOrderStatus,
-  createOrderStatusNotification,
+  assertAdminCanAccessOrder,
   getAnyOrderById,
+  notifyDeliveryCancelled,
+  notifyOrderStatusChange,
 } from '../../services/orderService.js';
-import { formatOrderStatusChangeBody } from '../../utils/orderStatusLabels.js';
 import { getParam, handleOrderError } from '../shared/orderHttp.js';
 import { patchStatusSchema } from './schemas.js';
 
@@ -45,23 +45,17 @@ export async function patchAdminOrderStatus(req: AuthRequest, res: Response): Pr
       return;
     }
 
+    assertAdminCanAccessOrder(req.userType, req.storeId, before);
+
     const nextStatus = validation.value.status as OrderStatus;
     const cancellationReason =
       nextStatus === 'cancelled'
         ? (validation.value.cancellationReason as string).trim()
         : undefined;
 
+    const previousDriverId = before.deliveryUserId;
     const updated = await adminSetOrderStatus(orderId, nextStatus, req.userId, cancellationReason);
-    await createOrderStatusNotification(updated, before.status as OrderStatus);
-    emitUserNotification(updated.userId, {
-      body: formatOrderStatusChangeBody(before.status, updated.status),
-      newStatus: updated.status,
-      orderId: updated.id,
-      previousStatus: before.status,
-      status: updated.status,
-      title: 'Actualización de orden',
-      type: 'ORDER_STATUS_CHANGED',
-    });
+    await notifyOrderStatusChange(updated, before.status as OrderStatus);
 
     emitOrderUpdated(updated.userId, {
       id: updated.id,
@@ -71,11 +65,15 @@ export async function patchAdminOrderStatus(req: AuthRequest, res: Response): Pr
 
     if (updated.status === 'cancelled') {
       emitOrderCancelled({ orderId: updated.id });
-      emitDeliveryOrderCancelled(updated.deliveryUserId, { orderId: updated.id });
+      const driverId = updated.deliveryUserId ?? previousDriverId;
+      if (driverId) {
+        emitDeliveryOrderCancelled(driverId, { orderId: updated.id });
+        await notifyDeliveryCancelled(updated.id, driverId);
+      }
       if (before.status === 'delivering') {
         await endDeliveryTrackingAndNotify({
           clientUserId: updated.userId,
-          deliveryUserId: updated.deliveryUserId ?? before.deliveryUserId,
+          deliveryUserId: driverId,
           orderId: updated.id,
           reason: 'cancelled',
         });

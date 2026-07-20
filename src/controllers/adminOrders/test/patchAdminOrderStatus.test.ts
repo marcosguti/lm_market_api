@@ -8,7 +8,8 @@ import { OrderDomainError } from '../../../services/orderService.js';
 import { patchAdminOrderStatus } from '../../adminOrders/patchAdminOrderStatus.js';
 
 const adminSetOrderStatus = vi.fn();
-const createOrderStatusNotification = vi.fn();
+const notifyOrderStatusChange = vi.fn();
+const notifyDeliveryCancelled = vi.fn();
 const getAnyOrderById = vi.fn();
 
 vi.mock('../../../realtime/socket.js', () => ({
@@ -31,8 +32,9 @@ vi.mock('../../../services/orderService.js', async (importOriginal) => {
   return {
     ...actual,
     adminSetOrderStatus: (...args: unknown[]) => adminSetOrderStatus(...args),
-    createOrderStatusNotification: (...args: unknown[]) => createOrderStatusNotification(...args),
     getAnyOrderById: (...args: unknown[]) => getAnyOrderById(...args),
+    notifyDeliveryCancelled: (...args: unknown[]) => notifyDeliveryCancelled(...args),
+    notifyOrderStatusChange: (...args: unknown[]) => notifyOrderStatusChange(...args),
   };
 });
 
@@ -69,7 +71,8 @@ describe('patchAdminOrderStatus controller', () => {
       totalAmount: 10,
       products: [],
     });
-    createOrderStatusNotification.mockResolvedValue(undefined);
+    notifyOrderStatusChange.mockResolvedValue(undefined);
+    notifyDeliveryCancelled.mockResolvedValue(undefined);
     vi.mocked(findUserById).mockResolvedValue({
       email: 'client@test.com',
       firstName: 'Cliente',
@@ -105,12 +108,43 @@ describe('patchAdminOrderStatus controller', () => {
       body: { status: 'preparing' },
       params: { id: 'o1' },
       userId: 'admin-1',
+      userType: 'superAdmin',
     } as AuthRequest;
     const res = mockRes();
     await patchAdminOrderStatus(req, res);
     expect(res.statusCode).toBe(200);
     expect(adminSetOrderStatus).toHaveBeenCalledWith('o1', 'preparing', 'admin-1', undefined);
-    expect(createOrderStatusNotification).toHaveBeenCalled();
+    expect(notifyOrderStatusChange).toHaveBeenCalled();
+  });
+
+  it('notifies assigned driver when order is cancelled', async () => {
+    getAnyOrderById.mockResolvedValue({
+      id: 'o1',
+      status: 'assignedToDeliveryDriver',
+      userId: 'client-1',
+      deliveryUserId: 'driver-1',
+      totalAmount: 10,
+      products: [],
+    });
+    adminSetOrderStatus.mockResolvedValue({
+      id: 'o1',
+      status: 'cancelled',
+      userId: 'client-1',
+      deliveryUserId: null,
+      totalAmount: 10,
+      products: [],
+      cancellationReason: 'Sin stock',
+    });
+    const req = {
+      body: { status: 'cancelled', cancellationReason: 'Sin stock' },
+      params: { id: 'o1' },
+      userId: 'admin-1',
+      userType: 'superAdmin',
+    } as AuthRequest;
+    const res = mockRes();
+    await patchAdminOrderStatus(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(notifyDeliveryCancelled).toHaveBeenCalledWith('o1', 'driver-1');
   });
 
   it('cancels with reason and sends email to client', async () => {
@@ -127,6 +161,7 @@ describe('patchAdminOrderStatus controller', () => {
       body: { status: 'cancelled', cancellationReason: 'Sin stock del producto' },
       params: { id: 'a5350180-1234-5678-9abc-def012345678' },
       userId: 'admin-1',
+      userType: 'superAdmin',
     } as AuthRequest;
     const res = mockRes();
     await patchAdminOrderStatus(req, res);
@@ -160,6 +195,7 @@ describe('patchAdminOrderStatus controller', () => {
       body: { status: 'cancelled', cancellationReason: 'Error de inventario' },
       params: { id: 'o1' },
       userId: 'admin-1',
+      userType: 'superAdmin',
     } as AuthRequest;
     const res = mockRes();
     await patchAdminOrderStatus(req, res);
@@ -174,6 +210,7 @@ describe('patchAdminOrderStatus controller', () => {
       body: { status: 'readyForDelivery' },
       params: { id: 'o1' },
       userId: 'admin-1',
+      userType: 'superAdmin',
     } as AuthRequest;
     const res = mockRes();
     await patchAdminOrderStatus(req, res);

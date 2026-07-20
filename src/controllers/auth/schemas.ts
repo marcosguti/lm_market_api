@@ -110,3 +110,12 @@ export const refreshSchema = Joi.object({
   deviceId: Joi.string().required(),
   refreshToken: Joi.string().required(),
 });
+
+export const putPushTokenSchema = Joi.object({
+  platform: Joi.string().valid('android', 'ios').required(),
+  token: Joi.string().trim().min(10).required(),
+});
+
+export const deletePushTokenSchema = Joi.object({
+  token: Joi.string().trim().min(10).required(),
+});

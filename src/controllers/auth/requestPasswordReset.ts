@@ -41,7 +41,7 @@ export async function requestPasswordReset(req: Request, res: Response): Promise
   await deletePasswordResetTokensByUserId(user.id);
   await createPasswordResetToken({ expiresAt, token, userId: user.id });
 
-  const resetUrl = `${getWebBaseUrl()}/restablecer-password?token=${token}`;
+  const resetUrl = `${getWebBaseUrl()}/restablecer-contrasena?token=${token}`;
   try {
     await sendPasswordResetEmail({
       email: user.email,

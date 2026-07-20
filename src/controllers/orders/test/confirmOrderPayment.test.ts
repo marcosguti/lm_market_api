@@ -5,11 +5,10 @@ import type { AuthRequest } from '../../../middlewares/auth.js';
 import { confirmOrderPayment } from '../confirmOrderPayment.js';
 
 const confirmPendingOrderPaymentWithDetails = vi.fn();
-const createOrderStatusNotification = vi.fn();
+const notifyOrderStatusChange = vi.fn();
 const uploadPaymentScreenshot = vi.fn();
 const emitKitchenOrderUpdated = vi.fn();
 const emitOrderUpdated = vi.fn();
-const emitUserNotification = vi.fn();
 
 vi.mock('../../../config/megasoft.js', () => ({
   megasoftConfig: { enabled: false },
@@ -18,7 +17,7 @@ vi.mock('../../../config/megasoft.js', () => ({
 vi.mock('../../../services/orderService.js', () => ({
   confirmPendingOrderPaymentWithDetails: (...args: unknown[]) =>
     confirmPendingOrderPaymentWithDetails(...args),
-  createOrderStatusNotification: (...args: unknown[]) => createOrderStatusNotification(...args),
+  notifyOrderStatusChange: (...args: unknown[]) => notifyOrderStatusChange(...args),
 }));
 
 vi.mock('../../../libs/filesInDigitalOcean/index.js', () => ({
@@ -28,7 +27,7 @@ vi.mock('../../../libs/filesInDigitalOcean/index.js', () => ({
 vi.mock('../../../realtime/socket.js', () => ({
   emitKitchenOrderUpdated: (...args: unknown[]) => emitKitchenOrderUpdated(...args),
   emitOrderUpdated: (...args: unknown[]) => emitOrderUpdated(...args),
-  emitUserNotification: (...args: unknown[]) => emitUserNotification(...args),
+  emitUserNotification: vi.fn(),
 }));
 
 function mockRes(): Response & { statusCode: number; body?: unknown } {
@@ -59,7 +58,7 @@ describe('confirmOrderPayment controller', () => {
         userId: 'client-1',
       },
     });
-    createOrderStatusNotification.mockResolvedValue(undefined);
+    notifyOrderStatusChange.mockResolvedValue(undefined);
     uploadPaymentScreenshot.mockResolvedValue('https://cdn.example/proof.jpg');
   });
 
@@ -151,8 +150,8 @@ describe('confirmOrderPayment controller', () => {
       reference: null,
       screenshotUrl: 'https://cdn.example/proof.jpg',
     });
-    expect(createOrderStatusNotification).toHaveBeenCalled();
-    expect(emitUserNotification).toHaveBeenCalled();
+    expect(notifyOrderStatusChange).toHaveBeenCalled();
     expect(emitKitchenOrderUpdated).toHaveBeenCalled();
+    expect(emitOrderUpdated).toHaveBeenCalled();
   });
 });

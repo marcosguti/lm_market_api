@@ -29,30 +29,30 @@ describe('RBAC auth and notifications routes', () => {
     });
   });
 
-  describe('PATCH /api/auth/cuenta (any authenticated)', () => {
+  describe('PATCH /api/auth/profile (any authenticated)', () => {
     const body = { firstName: 'Updated' };
 
     it('returns 401 without token', async () => {
-      await expectUnauthorized(app, 'patch', '/api/auth/cuenta', { body });
+      await expectUnauthorized(app, 'patch', '/api/auth/profile', { body });
     });
 
     it.each(ALL_ROLES)('allows %s', async (role) => {
-      await expectAllowed(app, 'patch', '/api/auth/cuenta', role as UserType, {
+      await expectAllowed(app, 'patch', '/api/auth/profile', role as UserType, {
         body,
         expectedStatus: 200,
       });
     });
   });
 
-  describe('POST /api/auth/cambiar-password (any authenticated)', () => {
+  describe('POST /api/auth/change-password (any authenticated)', () => {
     const body = { currentPassword: 'OldPass1a', newPassword: 'NewPass1b' };
 
     it('returns 401 without token', async () => {
-      await expectUnauthorized(app, 'post', '/api/auth/cambiar-password', { body });
+      await expectUnauthorized(app, 'post', '/api/auth/change-password', { body });
     });
 
     it.each(ALL_ROLES)('allows %s', async (role) => {
-      await expectAllowed(app, 'post', '/api/auth/cambiar-password', role as UserType, {
+      await expectAllowed(app, 'post', '/api/auth/change-password', role as UserType, {
         body,
         expectedStatus: 200,
       });
@@ -66,6 +66,36 @@ describe('RBAC auth and notifications routes', () => {
 
     it.each(ALL_ROLES)('allows %s', async (role) => {
       await expectAllowed(app, 'post', '/api/auth/logout', role as UserType, {
+        expectedStatus: 200,
+      });
+    });
+  });
+
+  describe('PUT /api/auth/push-token (any authenticated)', () => {
+    const body = { platform: 'android', token: 'fcm-token-example-1234567890' };
+
+    it('returns 401 without token', async () => {
+      await expectUnauthorized(app, 'put', '/api/auth/push-token', { body });
+    });
+
+    it.each(ALL_ROLES)('allows %s', async (role) => {
+      await expectAllowed(app, 'put', '/api/auth/push-token', role as UserType, {
+        body,
+        expectedStatus: 200,
+      });
+    });
+  });
+
+  describe('DELETE /api/auth/push-token (any authenticated)', () => {
+    const body = { token: 'fcm-token-example-1234567890' };
+
+    it('returns 401 without token', async () => {
+      await expectUnauthorized(app, 'delete', '/api/auth/push-token', { body });
+    });
+
+    it.each(ALL_ROLES)('allows %s', async (role) => {
+      await expectAllowed(app, 'delete', '/api/auth/push-token', role as UserType, {
+        body,
         expectedStatus: 200,
       });
     });
