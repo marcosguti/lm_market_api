@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { AuthRequest } from '../../middlewares/auth.js';
 
 import { uploadDealImage } from '../../libs/filesInDigitalOcean/index.js';
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { createDeal } from '../../services/dealService.js';
 import { createDealSchema, parseDealDate, parseMultipartBoolean } from './schemas.js';
 
@@ -30,7 +31,7 @@ export async function createAdminDeal(req: AuthRequest, res: Response): Promise<
   });
 
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
 

@@ -2,6 +2,7 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { listUsersPaginated } from '../../queries/user.js';
 import { listQuerySchema } from './schemas.js';
 import { serializeUser } from './userUtils.js';
@@ -13,7 +14,7 @@ export async function listAdminUsers(req: AuthRequest, res: Response): Promise<v
   }
   const validation = listQuerySchema.validate(req.query, { convert: true });
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   const { page, pageSize, search } = validation.value;

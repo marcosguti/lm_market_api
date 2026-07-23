@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { AuthRequest } from '../../middlewares/auth.js';
 
 import { uploadBannerImage } from '../../libs/filesInDigitalOcean/index.js';
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { getBannerById, updateBanner } from '../../services/bannerService.js';
 import { getParam } from '../shared/orderHttp.js';
 import { normalizeDescription, parseMultipartBoolean, updateBannerSchema } from './schemas.js';
@@ -39,7 +40,7 @@ export async function patchAdminBanner(req: AuthRequest, res: Response): Promise
   });
 
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
 

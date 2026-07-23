@@ -2,6 +2,7 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { getUserOrderHistory } from '../../services/orderService.js';
 import { handleOrderError } from '../shared/orderHttp.js';
 import { asClient } from './asClient.js';
@@ -12,7 +13,7 @@ export async function getOrderHistory(req: AuthRequest, res: Response): Promise<
   if (!userId) return;
   const validation = orderHistoryQuerySchema.validate(req.query, { convert: true });
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   try {

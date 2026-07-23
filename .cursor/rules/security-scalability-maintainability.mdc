@@ -1,0 +1,14 @@
+---
+description: Evaluar seguridad, escalabilidad y mantenibilidad en cada cambio de código
+alwaysApply: true
+---
+
+# Seguridad, escalabilidad y mantenibilidad
+
+Al agregar, modificar o revisar código — y antes de dar el trabajo por terminado — evalúa:
+
+1. **Seguridad** — auth/authz, validación de inputs, secretos, datos sensibles, inyección, exposición de errores internos.
+2. **Escalabilidad** — N+1 / queries innecesarias, trabajo pesado en hot paths, paginación/límites, estado en cliente vs servidor.
+3. **Mantenibilidad** — nombres claros, responsabilidades acotadas, evitar duplicación, tests donde aporta, no over-engineer.
+
+**Acción:** corrige lo que esté en alcance del cambio. Si hay un riesgo fuera de alcance, menciónalo brevemente al cerrar (sin bloquear por refactors ajenos).

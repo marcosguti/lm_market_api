@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { EmailVerificationError, verifyLoginCode } from '../../services/emailVerification/index.js';
 import { issueAuthSession } from './issueAuthSession.js';
 import { verifyLoginCodeSchema } from './schemas.js';
@@ -7,7 +8,7 @@ import { verifyLoginCodeSchema } from './schemas.js';
 export async function verifyLoginCodeHandler(req: Request, res: Response): Promise<void> {
   const validation = verifyLoginCodeSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   const { code, deviceId, email } = validation.value;

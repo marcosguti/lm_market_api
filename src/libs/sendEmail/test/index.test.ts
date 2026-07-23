@@ -19,9 +19,11 @@ vi.mock('../logo.js', () => ({
 }));
 
 import {
+  sendAdminAccountCreatedEmail,
   sendContactEmail,
   sendEmailVerificationCode,
   sendLoginCode,
+  sendNewOrderForAdminEmail,
   sendOpsAlertEmail,
   sendPasswordResetEmail,
 } from '../index.js';
@@ -147,6 +149,29 @@ describe('sendEmail transport', () => {
     });
   });
 
+  describe('sendAdminAccountCreatedEmail', () => {
+    it('sends account created email with credentials subject', async () => {
+      await sendAdminAccountCreatedEmail({
+        email: 'user@test.com',
+        firstName: 'Ana',
+        recoverPasswordUrl: 'https://www.lmmarket.com/recuperar-contrasena',
+        roleLabel: 'Cliente',
+        temporaryPassword: 'TempPass1abc',
+      });
+
+      expect(mailjetRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          Messages: [
+            expect.objectContaining({
+              Subject: 'Tu cuenta en LM Market ha sido creada',
+              To: [{ Email: 'user@test.com' }],
+            }),
+          ],
+        }),
+      );
+    });
+  });
+
   describe('sendPasswordResetEmail', () => {
     it('sends password reset email and masks token in logs', async () => {
       const infoSpy = vi.spyOn(console, 'info').mockImplementation(() => {});
@@ -252,6 +277,28 @@ describe('sendEmail transport', () => {
           Messages: [
             expect.objectContaining({
               To: [{ Email: 'Soporte@lmmarketca.com' }],
+            }),
+          ],
+        }),
+      );
+    });
+  });
+
+  describe('sendNewOrderForAdminEmail', () => {
+    it('sends new order email to admin with order id and status', async () => {
+      await sendNewOrderForAdminEmail({
+        email: 'admin@store.com',
+        firstName: 'Ana',
+        shortOrderId: '#a5350180',
+        statusLabel: 'Pago Confirmado',
+      });
+
+      expect(mailjetRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          Messages: [
+            expect.objectContaining({
+              Subject: 'Nueva orden #a5350180 — LM Market',
+              To: [{ Email: 'admin@store.com' }],
             }),
           ],
         }),

@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { signAccessToken, signRefreshToken, verifyToken } from '../../libs/jwt.js';
 import { comparePassword } from '../../libs/passwordHashing.js';
 import {
@@ -16,7 +17,7 @@ const REVOKED_PREFIX = 'revoked:';
 export async function refresh(req: Request, res: Response): Promise<void> {
   const validation = refreshSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   const { deviceId, refreshToken } = validation.value;

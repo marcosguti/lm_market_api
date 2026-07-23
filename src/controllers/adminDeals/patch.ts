@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { AuthRequest } from '../../middlewares/auth.js';
 
 import { uploadDealImage } from '../../libs/filesInDigitalOcean/index.js';
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { getDealById, updateDeal } from '../../services/dealService.js';
 import { getParam } from '../shared/orderHttp.js';
 import {
@@ -42,7 +43,7 @@ export async function patchAdminDeal(req: AuthRequest, res: Response): Promise<v
   });
 
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
 

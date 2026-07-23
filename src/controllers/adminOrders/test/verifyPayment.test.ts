@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AuthRequest } from '../../../middlewares/auth.js';
 import { verifyPayment } from '../verifyPayment.js';
 
+const assertAdminCanAccessOrder = vi.fn();
+const getAnyOrderById = vi.fn();
 const verifyPaymentByAdmin = vi.fn();
 const notifyOrderPaid = vi.fn();
 
@@ -11,6 +13,8 @@ vi.mock('../../../services/orderService.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../services/orderService.js')>();
   return {
     ...actual,
+    assertAdminCanAccessOrder: (...args: unknown[]) => assertAdminCanAccessOrder(...args),
+    getAnyOrderById: (...args: unknown[]) => getAnyOrderById(...args),
     notifyOrderPaid: (...args: unknown[]) => notifyOrderPaid(...args),
     verifyPaymentByAdmin: (...args: unknown[]) => verifyPaymentByAdmin(...args),
   };
@@ -37,7 +41,15 @@ function mockRes(): Response & { statusCode: number; body?: unknown } {
 describe('verifyPayment controller', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    getAnyOrderById.mockResolvedValue({
+      id: 'o1',
+      products: [],
+      status: 'paymentPendingConfirmation',
+      storeId: 'store-1',
+    });
+    assertAdminCanAccessOrder.mockReturnValue(undefined);
     verifyPaymentByAdmin.mockResolvedValue({ id: 'o1', status: 'paymentConfirmed', products: [] });
+    notifyOrderPaid.mockResolvedValue(undefined);
   });
 
   it('returns 401 without userId', async () => {
@@ -62,11 +74,14 @@ describe('verifyPayment controller', () => {
     const req = {
       body: { verify: true },
       params: { id: 'o1' },
+      storeId: 'store-1',
       userId: 'admin-1',
+      userType: 'admin',
     } as AuthRequest;
     const res = mockRes();
     await verifyPayment(req, res);
     expect(res.statusCode).toBe(200);
+    expect(getAnyOrderById).toHaveBeenCalledWith('o1');
     expect(verifyPaymentByAdmin).toHaveBeenCalledWith('o1', 'admin-1', true);
     expect(notifyOrderPaid).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'o1', status: 'paymentConfirmed' }),
@@ -81,7 +96,9 @@ describe('verifyPayment controller', () => {
     const req = {
       body: { verify: false },
       params: { id: 'missing' },
+      storeId: 'store-1',
       userId: 'admin-1',
+      userType: 'admin',
     } as AuthRequest;
     const res = mockRes();
     await verifyPayment(req, res);

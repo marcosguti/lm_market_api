@@ -2,6 +2,7 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { emitKitchenOrderUpdated, emitOrderUpdated } from '../../realtime/socket.js';
 import {
   assertAdminCanAccessOrder,
@@ -22,7 +23,7 @@ export async function assignDelivery(req: AuthRequest, res: Response): Promise<v
 
   const validation = assignDeliverySchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
 

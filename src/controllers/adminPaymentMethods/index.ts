@@ -2,6 +2,7 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import {
   getAllPaymentMethodConfigs,
   getPaymentMethodConfig,
@@ -33,7 +34,7 @@ export async function patchAdminPaymentMethod(req: AuthRequest, res: Response): 
     stripUnknown: true,
   });
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
 

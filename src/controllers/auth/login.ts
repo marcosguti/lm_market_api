@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { comparePassword } from '../../libs/passwordHashing.js';
 import { findUserByEmail } from '../../queries/user.js';
 import { getActiveCodeRemainingSeconds } from '../../services/emailVerification/index.js';
@@ -9,14 +10,14 @@ import { loginSchema } from './schemas.js';
 export async function login(req: Request, res: Response): Promise<void> {
   const validation = loginSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   const { deviceId, email, password } = validation.value;
 
   const user = await findUserByEmail(email);
   if (!user || !(await comparePassword(password, user.password))) {
-    res.status(401).json({ error: 'Email o contraseña inválidos' });
+    res.status(401).json({ error: 'Correo o contraseña inválidos' });
     return;
   }
 

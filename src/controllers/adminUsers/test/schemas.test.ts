@@ -59,4 +59,22 @@ describe('adminUsers schemas storeId', () => {
     const result = patchSchema.validate({ storeId: STORE_ID });
     expect(result.error).toBeUndefined();
   });
+
+  it('forbids password on create', () => {
+    const result = createSchema.validate({
+      email: 'c@test.com',
+      firstName: 'C',
+      lastName: 'D',
+      numberId: '2',
+      numberIdType: 'V',
+      password: 'TempPass1',
+      type: 'client',
+    });
+    expect(result.error).toBeDefined();
+  });
+
+  it('forbids password on patch', () => {
+    const result = patchSchema.validate({ password: 'TempPass1' });
+    expect(result.error).toBeDefined();
+  });
 });

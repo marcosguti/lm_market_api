@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { findProductsPaginated } from '../../queries/product.js';
 import { assertStoreActive, StoreNotFoundError } from '../../queries/store.js';
 import { getProductsQuerySchema } from './schemas.js';
@@ -10,7 +11,7 @@ export async function getProducts(req: Request, res: Response): Promise<void> {
     convert: true,
   });
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   const { brand, department, maxPrice, minPrice, page, pageSize, search, sort, storeId } =

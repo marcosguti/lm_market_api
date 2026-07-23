@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { AuthRequest } from '../../middlewares/auth.js';
 
 import { uploadBannerImage } from '../../libs/filesInDigitalOcean/index.js';
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { createBanner } from '../../services/bannerService.js';
 import { createBannerSchema, normalizeDescription, parseMultipartBoolean } from './schemas.js';
 
@@ -32,7 +33,7 @@ export async function createAdminBanner(req: AuthRequest, res: Response): Promis
   });
 
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
 

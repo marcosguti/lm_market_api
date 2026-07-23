@@ -2,6 +2,7 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { comparePassword, createHash } from '../../libs/passwordHashing.js';
 import { findUserById, updateUserPassword } from '../../queries/user.js';
 import { changePasswordSchema } from './schemas.js';
@@ -13,7 +14,7 @@ export async function changePassword(req: AuthRequest, res: Response): Promise<v
   }
   const validation = changePasswordSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   const { currentPassword, newPassword } = validation.value;

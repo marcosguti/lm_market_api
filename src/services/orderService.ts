@@ -11,6 +11,7 @@ import { Prisma, PrismaClient } from '@prisma/client';
 
 import { megasoftConfig, resolveMegasoftAmount } from '../config/megasoft.js';
 import { sendPushToUser } from '../libs/fcm/index.js';
+import { sendNewOrderForAdminEmail } from '../libs/sendEmail/index.js';
 import {
   assertAdminCanAccessOrder as assertAdminCanAccessOrderScope,
   StoreScopeError,
@@ -18,7 +19,7 @@ import {
 import prisma from '../prisma.js';
 import { emitKitchenNewPaid, emitOrderUpdated, emitUserNotification } from '../realtime/socket.js';
 import { startOfBusinessDayCaracas, startOfNextBusinessDayCaracas } from '../utils/businessDay.js';
-import { formatOrderStatusChangeBody } from '../utils/orderStatusLabels.js';
+import { formatOrderStatusChangeBody, formatOrderStatusLabel } from '../utils/orderStatusLabels.js';
 import { getUsdVesRate } from './bcvExchangeRate.js';
 import { MegasoftPaymentRejectedError } from './megasoft/types.js';
 
@@ -1214,6 +1215,7 @@ export async function notifyOrderPaid(
     totalAmount: order.totalAmount,
   });
   emitKitchenNewPaid(order);
+  await notifyStoreAdminsNewOrderEmail(order);
 }
 
 /** DB inbox + socket + FCM for the order owner (client). */
@@ -1245,6 +1247,57 @@ export async function notifyOrderStatusChange(
     },
     title,
   });
+}
+
+/** Email store admins when an order reaches paymentPendingConfirmation or paymentConfirmed. */
+export async function notifyStoreAdminsNewOrderEmail(order: {
+  id: string;
+  status: OrderStatus;
+  storeId: null | string;
+}): Promise<void> {
+  if (order.status !== 'paymentPendingConfirmation' && order.status !== 'paymentConfirmed') {
+    return;
+  }
+  if (!order.storeId) {
+    return;
+  }
+
+  try {
+    const admins = await client.user.findMany({
+      select: { email: true, firstName: true },
+      where: { storeId: order.storeId, type: 'admin' },
+    });
+    if (admins.length === 0) {
+      return;
+    }
+
+    const shortOrderId = formatShortOrderId(order.id);
+    const statusLabel = formatOrderStatusLabel(order.status);
+    const results = await Promise.allSettled(
+      admins.map((admin) =>
+        sendNewOrderForAdminEmail({
+          email: admin.email,
+          firstName: admin.firstName,
+          shortOrderId,
+          statusLabel,
+        }),
+      ),
+    );
+
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        console.error('[orders] failed to send new-order admin email', {
+          error: result.reason instanceof Error ? result.reason.message : String(result.reason),
+          orderId: order.id,
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[orders] failed to notify store admins of new order', {
+      error: err instanceof Error ? err.message : String(err),
+      orderId: order.id,
+    });
+  }
 }
 
 export async function startOrderDelivering(
@@ -1711,6 +1764,11 @@ async function applyStoreIdToPendingOrder(
     data: { storeId },
     where: { id: order.id },
   });
+}
+
+function formatShortOrderId(orderId: string): string {
+  const segment = orderId.split('-')[0]?.trim() || orderId.trim();
+  return `#${segment}`;
 }
 
 function shortOrderRef(orderId: string): string {

@@ -2,7 +2,10 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { generateStrongPassword } from '../../libs/generateStrongPassword.js';
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { createHash } from '../../libs/passwordHashing.js';
+import { sendAdminAccountCreatedEmail } from '../../libs/sendEmail/index.js';
 import { assertStoreActive, StoreNotFoundError } from '../../queries/store.js';
 import {
   createUser,
@@ -10,13 +13,22 @@ import {
   findUserByNumberId,
   findUserByPhone,
 } from '../../queries/user.js';
-import { createSchema, DEFAULT_TEMP_PASSWORD } from './schemas.js';
+import { createSchema } from './schemas.js';
 import { isPrismaUniqueError, serializeUser } from './userUtils.js';
+
+const USER_TYPE_LABELS: Record<string, string> = {
+  admin: 'Administrador',
+  client: 'Cliente',
+  deliveryDriver: 'Reparto',
+};
+
+const getWebBaseUrl = (): string =>
+  (process.env.WEB_BASE_URL ?? 'https://www.lmmarket.com').replace(/\/$/, '');
 
 export async function createAdminUser(req: AuthRequest, res: Response): Promise<void> {
   const validation = createSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   const body = validation.value;
@@ -35,7 +47,7 @@ export async function createAdminUser(req: AuthRequest, res: Response): Promise<
   if (needsStore(body.type)) {
     if (isSuper) {
       if (!body.storeId) {
-        res.status(400).json({ error: '"storeId" is required' });
+        res.status(400).json({ error: 'La sede es requerida' });
         return;
       }
       storeId = body.storeId as string;
@@ -51,7 +63,7 @@ export async function createAdminUser(req: AuthRequest, res: Response): Promise<
 
   const existingEmail = await findUserByEmail(body.email);
   if (existingEmail) {
-    res.status(409).json({ error: 'Email ya registrado' });
+    res.status(409).json({ error: 'Correo ya registrado' });
     return;
   }
   const existingNumberId = await findUserByNumberId(body.numberId);
@@ -79,8 +91,7 @@ export async function createAdminUser(req: AuthRequest, res: Response): Promise<
     }
   }
 
-  const useDefaultPassword = body.password === undefined || body.password === '';
-  const plainPassword = useDefaultPassword ? DEFAULT_TEMP_PASSWORD : body.password;
+  const plainPassword = generateStrongPassword();
   const hashedPassword = await createHash(plainPassword);
 
   try {
@@ -97,13 +108,29 @@ export async function createAdminUser(req: AuthRequest, res: Response): Promise<
       storeId,
       type: body.type,
     });
+
+    try {
+      await sendAdminAccountCreatedEmail({
+        email: user.email,
+        firstName: user.firstName,
+        recoverPasswordUrl: `${getWebBaseUrl()}/recuperar-contrasena`,
+        roleLabel: USER_TYPE_LABELS[user.type] ?? user.type,
+        temporaryPassword: plainPassword,
+      });
+    } catch (err) {
+      console.error('[createAdminUser] failed to send account-created email', {
+        email: user.email,
+        error: err instanceof Error ? err.message : err,
+        userId: user.id,
+      });
+    }
+
     res.status(201).json({
-      ...(useDefaultPassword ? { temporaryPassword: DEFAULT_TEMP_PASSWORD } : {}),
       user: serializeUser(user),
     });
   } catch (err) {
     if (isPrismaUniqueError(err)) {
-      res.status(409).json({ error: 'El email, la cédula o el teléfono ya existe' });
+      res.status(409).json({ error: 'El correo, la cédula o el teléfono ya existe' });
       return;
     }
     throw err;

@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { AuthRequest } from '../../middlewares/auth.js';
 
 import { uploadFile } from '../../libs/filesInDigitalOcean/index.js';
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import {
   findOrCreateBrand,
   findOrCreateDepartment,
@@ -25,7 +26,7 @@ export async function createAdminProduct(req: AuthRequest, res: Response): Promi
     normalizeAdminProductMultipartBody(req.body as Record<string, unknown>),
   );
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   const body = validation.value;

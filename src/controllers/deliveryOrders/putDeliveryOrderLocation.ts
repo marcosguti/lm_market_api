@@ -2,6 +2,7 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { upsertDeliveryLocation } from '../../services/orderDeliveryTrackingService.js';
 import { getParam, handleOrderError } from '../shared/orderHttp.js';
 import { upsertDeliveryLocationSchema } from './schemas.js';
@@ -19,7 +20,7 @@ export async function putDeliveryOrderLocation(req: AuthRequest, res: Response):
 
   const validation = upsertDeliveryLocationSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
 

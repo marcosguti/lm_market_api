@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import {
   passwordResetTokenErrorMessage,
   validatePasswordResetToken,
@@ -12,7 +13,7 @@ export async function validatePasswordResetTokenHandler(
 ): Promise<void> {
   const validation = validatePasswordResetTokenSchema.validate(req.query);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message, valid: false });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error), valid: false });
     return;
   }
 

@@ -1,6 +1,7 @@
 import type { Response } from 'express';
 import type { Request } from 'express';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { findUserByEmail } from '../../queries/user.js';
 import {
   createAndSendVerificationCode,
@@ -11,7 +12,7 @@ import { sendVerificationCodeSchema } from './schemas.js';
 export async function sendVerificationCode(req: Request, res: Response): Promise<void> {
   const validation = sendVerificationCodeSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   const { email } = validation.value;

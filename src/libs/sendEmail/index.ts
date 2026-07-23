@@ -1,9 +1,11 @@
 import Mailjet from 'node-mailjet';
 
 import { getLogoInlineAttachment } from './logo.js';
+import { getAdminAccountCreatedTemplate } from './templates/adminAccountCreated.js';
 import { getContactMessageTemplate } from './templates/contactMessage.js';
 import { getEmailVerificationTemplate } from './templates/emailVerification.js';
 import { getLoginCodeTemplate } from './templates/loginCode.js';
+import { getNewOrderForAdminTemplate } from './templates/newOrderForAdmin.js';
 import { getOpsAlertTemplate } from './templates/opsAlert.js';
 import { getOrderCancelledTemplate } from './templates/orderCancelled.js';
 import { getPasswordResetTemplate } from './templates/passwordReset.js';
@@ -147,6 +149,66 @@ const logMailjetSendFailure = (err: unknown): void => {
   }
 
   console.error('[mailjet] send failed', err);
+};
+
+export const sendAdminAccountCreatedEmail = async ({
+  email,
+  firstName,
+  recoverPasswordUrl,
+  roleLabel,
+  temporaryPassword,
+}: {
+  email: string;
+  firstName: string;
+  recoverPasswordUrl: string;
+  roleLabel: string;
+  temporaryPassword: string;
+}): Promise<void> => {
+  const { fromEmail } = assertMailjetConfig();
+  const mailjet = getMailjetClient();
+
+  const payload = {
+    Messages: [
+      buildMailjetMessage({
+        htmlPart: getAdminAccountCreatedTemplate({
+          firstName,
+          recoverPasswordUrl,
+          roleLabel,
+          temporaryPassword,
+        }),
+        subject: 'Tu cuenta en LM Market ha sido creada',
+        toEmail: email,
+      }),
+    ],
+  };
+
+  // eslint-disable-next-line no-console
+  console.info('[mailjet] sending admin account created', {
+    from: fromEmail,
+    to: email,
+  });
+
+  try {
+    const response = await mailjet.post('send', { version: 'v3.1' }).request(payload);
+    const message = response.body?.Messages?.[0];
+    const status = message?.Status;
+
+    // eslint-disable-next-line no-console
+    console.info('[mailjet] send response', {
+      errors: message?.Errors,
+      messageId: message?.MessageID,
+      status,
+    });
+
+    if (status !== 'success') {
+      throw new Error(
+        `Mailjet status: ${status ?? 'unknown'} - ${JSON.stringify(message?.Errors ?? response.body)}`,
+      );
+    }
+  } catch (err) {
+    logMailjetSendFailure(err);
+    throw err;
+  }
 };
 
 export const sendEmailVerificationCode = async ({
@@ -337,6 +399,61 @@ export const sendOrderCancelledEmail = async ({
   console.info('[mailjet] sending order cancelled', {
     from: fromEmail,
     shortOrderId,
+    to: email,
+  });
+
+  try {
+    const response = await mailjet.post('send', { version: 'v3.1' }).request(payload);
+    const message = response.body?.Messages?.[0];
+    const status = message?.Status;
+
+    // eslint-disable-next-line no-console
+    console.info('[mailjet] send response', {
+      errors: message?.Errors,
+      messageId: message?.MessageID,
+      status,
+    });
+
+    if (status !== 'success') {
+      throw new Error(
+        `Mailjet status: ${status ?? 'unknown'} - ${JSON.stringify(message?.Errors ?? response.body)}`,
+      );
+    }
+  } catch (err) {
+    logMailjetSendFailure(err);
+    throw err;
+  }
+};
+
+export const sendNewOrderForAdminEmail = async ({
+  email,
+  firstName,
+  shortOrderId,
+  statusLabel,
+}: {
+  email: string;
+  firstName: string;
+  shortOrderId: string;
+  statusLabel: string;
+}): Promise<void> => {
+  const { fromEmail } = assertMailjetConfig();
+  const mailjet = getMailjetClient();
+
+  const payload = {
+    Messages: [
+      buildMailjetMessage({
+        htmlPart: getNewOrderForAdminTemplate({ firstName, shortOrderId, statusLabel }),
+        subject: `Nueva orden ${shortOrderId} — LM Market`,
+        toEmail: email,
+      }),
+    ],
+  };
+
+  // eslint-disable-next-line no-console
+  console.info('[mailjet] sending new order for admin', {
+    from: fromEmail,
+    shortOrderId,
+    statusLabel,
     to: email,
   });
 

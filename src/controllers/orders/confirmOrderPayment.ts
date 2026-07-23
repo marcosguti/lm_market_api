@@ -6,10 +6,12 @@ import type { AuthRequest } from '../../middlewares/auth.js';
 
 import { megasoftConfig } from '../../config/megasoft.js';
 import { uploadPaymentScreenshot } from '../../libs/filesInDigitalOcean/index.js';
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { emitKitchenOrderUpdated, emitOrderUpdated } from '../../realtime/socket.js';
 import {
   confirmPendingOrderPaymentWithDetails,
   notifyOrderStatusChange,
+  notifyStoreAdminsNewOrderEmail,
 } from '../../services/orderService.js';
 import { getParam, handleOrderError } from '../shared/orderHttp.js';
 import { asClient } from './asClient.js';
@@ -63,7 +65,7 @@ export async function confirmOrderPayment(req: AuthRequest, res: Response): Prom
     reference,
   });
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
 
@@ -109,6 +111,7 @@ export async function confirmOrderPayment(req: AuthRequest, res: Response): Prom
     });
 
     await notifyOrderStatusChange(result.order, 'pending');
+    await notifyStoreAdminsNewOrderEmail(result.order);
     const orderPayload = {
       id: result.order.id,
       status: result.order.status,

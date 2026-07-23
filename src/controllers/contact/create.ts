@@ -1,12 +1,13 @@
 import type { Request, Response } from 'express';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { sendContactEmail } from '../../libs/sendEmail/index.js';
 import { createContactSchema } from './schemas.js';
 
 export async function createContact(req: Request, res: Response): Promise<void> {
   const validation = createContactSchema.validate(req.body, { abortEarly: true });
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
 

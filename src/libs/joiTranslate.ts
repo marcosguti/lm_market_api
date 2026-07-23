@@ -3,6 +3,32 @@ type JoiErrorDetail = {
   type: string;
 };
 
+const FIELD_LABELS: Record<string, string> = {
+  address: 'dirección',
+  brand: 'marca',
+  code: 'código',
+  department: 'departamento',
+  description: 'descripción',
+  email: 'correo electrónico',
+  firstName: 'nombre',
+  id: 'id',
+  lastName: 'apellido',
+  method: 'método',
+  name: 'nombre',
+  numberId: 'cédula',
+  numberIdType: 'tipo de cédula',
+  page: 'página',
+  pageSize: 'tamaño de página',
+  password: 'contraseña',
+  phone: 'teléfono',
+  reference: 'referencia',
+  search: 'búsqueda',
+  status: 'status',
+  storeId: 'sede',
+  type: 'rol',
+  verify: 'verificar',
+};
+
 const LABELS: Record<string, string> = {
   'alternatives.match': 'no coincide con ninguna alternativa válida',
   'any.invalid': 'contiene un valor inválido',
@@ -28,7 +54,7 @@ const LABELS: Record<string, string> = {
   'object.unknown': 'tiene claves no permitidas',
   'string.alphanum': 'solo puede contener letras y números',
   'string.base': 'debe ser una cadena de texto',
-  'string.email': 'debe ser un email válido',
+  'string.email': 'debe ser un correo electrónico válido',
   'string.empty': 'no puede estar vacío',
   'string.guid': 'debe ser un UUID válido',
   'string.length': 'debe tener exactamente {#limit} caracteres',
@@ -39,6 +65,12 @@ const LABELS: Record<string, string> = {
 };
 
 type JoiContext = { label?: unknown } & Record<string, unknown>;
+
+/** First Joi detail as Spanish message (for controller validation blocks). */
+export function joiValidationErrorMessage(error: { details: JoiErrorDetail[] }): string {
+  const first = error.details[0];
+  return first ? translateJoiError(first) : 'Datos inválidos';
+}
 
 /**
  * Translate an array of Joi error details to a single Spanish message.
@@ -79,7 +111,9 @@ export function translateJoiError(detail: JoiErrorDetail): string {
 
 function describeKey(label: unknown): string {
   if (!label) return 'el campo';
-  return `"${label}"`;
+  const raw = String(label);
+  const mapped = FIELD_LABELS[raw];
+  return mapped ?? raw;
 }
 
 function interpolate(template: string, context: Record<string, unknown> | undefined): string {

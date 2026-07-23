@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { createHash } from '../../libs/passwordHashing.js';
 import { revokeAllLinkedDevicesForUser } from '../../queries/linkedDevice.js';
 import { deletePasswordResetToken } from '../../queries/passwordResetToken.js';
@@ -13,7 +14,7 @@ import { resetPasswordSchema } from './schemas.js';
 export async function resetPassword(req: Request, res: Response): Promise<void> {
   const validation = resetPasswordSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   const { newPassword, token } = validation.value;

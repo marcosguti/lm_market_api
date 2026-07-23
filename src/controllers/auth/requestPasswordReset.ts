@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 
 import { v4 as uuid } from 'uuid';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { sendPasswordResetEmail } from '../../libs/sendEmail/index.js';
 import {
   createPasswordResetToken,
@@ -22,7 +23,7 @@ const getWebBaseUrl = (): string =>
 export async function requestPasswordReset(req: Request, res: Response): Promise<void> {
   const validation = requestResetSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   const { email } = validation.value;

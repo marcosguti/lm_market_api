@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import type { AuthRequest } from '../../middlewares/auth.js';
 
 import { isDeliveryCitySlug, isInsideDeliveryCityPolygon } from '../../config/delivery.js';
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { MapboxGeocodingError, reverseGeocodeDeliveryPin } from '../../libs/mapboxGeocoding.js';
 import { updateUser } from '../../queries/user.js';
 import { putDeliveryAddressSchema } from './schemas.js';
@@ -16,7 +17,7 @@ export async function putDeliveryAddress(req: AuthRequest, res: Response): Promi
 
   const validation = putDeliveryAddressSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
 

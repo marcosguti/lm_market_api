@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import type { AuthRequest } from '../../middlewares/auth.js';
 import type { FileFromMulter } from '../../types/index.js';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { getBlogArticleById, updateBlogArticle } from '../../services/blogArticleService.js';
 import {
   deleteRemovedContentImages,
@@ -43,7 +44,7 @@ export async function patchAdminBlogArticle(req: AuthRequest, res: Response): Pr
   });
 
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
 

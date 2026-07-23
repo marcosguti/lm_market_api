@@ -3,6 +3,7 @@ import type { Response } from 'express';
 import type { AuthRequest } from '../../middlewares/auth.js';
 import type { FileFromMulter } from '../../types/index.js';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { createBlogArticle } from '../../services/blogArticleService.js';
 import { uploadAndReplaceContentImages } from '../../utils/blogArticleContentImages.js';
 import { createBlogArticleSchema, parseMultipartBoolean } from './schemas.js';
@@ -27,7 +28,7 @@ export async function createAdminBlogArticle(req: AuthRequest, res: Response): P
   });
 
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
 

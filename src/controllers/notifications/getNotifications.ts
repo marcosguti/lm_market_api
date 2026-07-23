@@ -2,6 +2,7 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import {
   listNotificationsForInbox,
   listNotificationsForUser,
@@ -16,7 +17,7 @@ export async function getNotifications(req: AuthRequest, res: Response): Promise
   }
   const validation = notificationsQuerySchema.validate(req.query, { convert: true });
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   try {

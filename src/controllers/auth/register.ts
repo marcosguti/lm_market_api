@@ -2,6 +2,7 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { createHash } from '../../libs/passwordHashing.js';
 import {
   createUser,
@@ -18,7 +19,7 @@ import { registerSchema } from './schemas.js';
 export async function register(req: AuthRequest, res: Response): Promise<void> {
   const validation = registerSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   const body = validation.value;
@@ -29,7 +30,7 @@ export async function register(req: AuthRequest, res: Response): Promise<void> {
     body.phone ? findUserByPhone(body.phone) : Promise.resolve(null),
   ]);
   if (existingEmail) {
-    res.status(409).json({ error: 'Email ya registrado' });
+    res.status(409).json({ error: 'Correo ya registrado' });
     return;
   }
   if (existingNumberId) {

@@ -6,6 +6,7 @@ import { confirmOrderPayment } from '../confirmOrderPayment.js';
 
 const confirmPendingOrderPaymentWithDetails = vi.fn();
 const notifyOrderStatusChange = vi.fn();
+const notifyStoreAdminsNewOrderEmail = vi.fn();
 const uploadPaymentScreenshot = vi.fn();
 const emitKitchenOrderUpdated = vi.fn();
 const emitOrderUpdated = vi.fn();
@@ -18,6 +19,7 @@ vi.mock('../../../services/orderService.js', () => ({
   confirmPendingOrderPaymentWithDetails: (...args: unknown[]) =>
     confirmPendingOrderPaymentWithDetails(...args),
   notifyOrderStatusChange: (...args: unknown[]) => notifyOrderStatusChange(...args),
+  notifyStoreAdminsNewOrderEmail: (...args: unknown[]) => notifyStoreAdminsNewOrderEmail(...args),
 }));
 
 vi.mock('../../../libs/filesInDigitalOcean/index.js', () => ({
@@ -59,6 +61,7 @@ describe('confirmOrderPayment controller', () => {
       },
     });
     notifyOrderStatusChange.mockResolvedValue(undefined);
+    notifyStoreAdminsNewOrderEmail.mockResolvedValue(undefined);
     uploadPaymentScreenshot.mockResolvedValue('https://cdn.example/proof.jpg');
   });
 
@@ -152,6 +155,9 @@ describe('confirmOrderPayment controller', () => {
       screenshotUrl: 'https://cdn.example/proof.jpg',
     });
     expect(notifyOrderStatusChange).toHaveBeenCalled();
+    expect(notifyStoreAdminsNewOrderEmail).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'o1', status: 'paymentPendingConfirmation' }),
+    );
     expect(emitKitchenOrderUpdated).toHaveBeenCalled();
     expect(emitOrderUpdated).toHaveBeenCalled();
   });

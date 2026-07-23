@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import { LOGO_CONTENT_ID } from '../logo.js';
+import { getAdminAccountCreatedTemplate } from '../templates/adminAccountCreated.js';
 import { BRAND } from '../templates/common.js';
 import { getContactMessageTemplate } from '../templates/contactMessage.js';
 import { getEmailVerificationTemplate } from '../templates/emailVerification.js';
 import { getLoginCodeTemplate } from '../templates/loginCode.js';
+import { getNewOrderForAdminTemplate } from '../templates/newOrderForAdmin.js';
 import { getOpsAlertTemplate } from '../templates/opsAlert.js';
 import { getOrderCancelledTemplate } from '../templates/orderCancelled.js';
 import { getPasswordResetTemplate } from '../templates/passwordReset.js';
@@ -36,6 +38,24 @@ describe('email templates', () => {
     expect(html).toContain('Restablecer contraseña');
     expect(html).toContain('Hola Ana');
     expect(html).toContain('https://www.lmmarket.com/restablecer-contrasena?token=abc');
+    expect(html).toContain(`src="cid:${LOGO_CONTENT_ID}"`);
+  });
+
+  it('admin account created template includes role, password and recover link', () => {
+    const html = getAdminAccountCreatedTemplate({
+      firstName: 'Ana',
+      recoverPasswordUrl: 'https://www.lmmarket.com/recuperar-contrasena',
+      roleLabel: 'Cliente',
+      temporaryPassword: 'TempPass1abc',
+    });
+
+    expect(html).toContain(BRAND.primary);
+    expect(html).toContain('Hola Ana');
+    expect(html).toContain('Cliente');
+    expect(html).toContain('TempPass1abc');
+    expect(html).toContain('Contraseña temporal');
+    expect(html).toContain('https://www.lmmarket.com/recuperar-contrasena');
+    expect(html).toContain('Recuperar contraseña');
     expect(html).toContain(`src="cid:${LOGO_CONTENT_ID}"`);
   });
 
@@ -74,6 +94,33 @@ describe('email templates', () => {
     expect(html).toContain('Producto agotado &lt;script&gt;');
     expect(html).not.toContain('<script>');
     expect(html).toContain(`src="cid:${LOGO_CONTENT_ID}"`);
+  });
+
+  it('new order for admin template includes order id, status and panel message', () => {
+    const html = getNewOrderForAdminTemplate({
+      firstName: 'Ana',
+      shortOrderId: '#a5350180',
+      statusLabel: 'Pago por confirmar',
+    });
+
+    expect(html).toContain('Hola Ana');
+    expect(html).toContain('#a5350180');
+    expect(html).toContain('Pago por confirmar');
+    expect(html).toContain(
+      'Hay una nueva orden por gestionar. Por favor revísala desde el panel de órdenes ingresando el id de la orden.',
+    );
+    expect(html).toContain(`src="cid:${LOGO_CONTENT_ID}"`);
+  });
+
+  it('new order for admin template escapes status label HTML', () => {
+    const html = getNewOrderForAdminTemplate({
+      firstName: 'Ana',
+      shortOrderId: '#a5350180',
+      statusLabel: 'Pago <script>',
+    });
+
+    expect(html).toContain('Pago &lt;script&gt;');
+    expect(html).not.toContain('<script>');
   });
 
   it('contact message template includes fields and escapes HTML', () => {

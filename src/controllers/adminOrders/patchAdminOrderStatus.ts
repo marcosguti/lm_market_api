@@ -3,6 +3,7 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { sendOrderCancelledEmail } from '../../libs/sendEmail/index.js';
 import { findUserById } from '../../queries/user.js';
 import {
@@ -29,7 +30,7 @@ export async function patchAdminOrderStatus(req: AuthRequest, res: Response): Pr
   }
   const validation = patchStatusSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
 

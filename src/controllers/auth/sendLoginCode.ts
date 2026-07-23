@@ -1,5 +1,6 @@
 import type { Request, Response } from 'express';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { findUserByEmail } from '../../queries/user.js';
 import {
   createAndSendLoginCode,
@@ -10,7 +11,7 @@ import { sendLoginCodeSchema } from './schemas.js';
 export async function sendLoginCode(req: Request, res: Response): Promise<void> {
   const validation = sendLoginCodeSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   const { email } = validation.value;

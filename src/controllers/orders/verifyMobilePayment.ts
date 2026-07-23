@@ -7,6 +7,7 @@ import {
   megasoftConfig,
   resolveMegasoftAmount,
 } from '../../config/megasoft.js';
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import prisma from '../../prisma.js';
 import {
   MegasoftPaymentRejectedError,
@@ -34,7 +35,7 @@ export async function verifyMobilePayment(req: AuthRequest, res: Response): Prom
 
   const validation = verifyMobilePaymentSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
 

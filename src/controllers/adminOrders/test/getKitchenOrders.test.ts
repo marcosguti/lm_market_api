@@ -89,7 +89,7 @@ describe('getKitchenOrders controller', () => {
         status: 'preparing',
         storeId: 'store-1',
       },
-      userType: 'admin',
+      userType: 'superAdmin',
     } as unknown as AuthRequest;
     const res = mockRes();
 
@@ -97,7 +97,7 @@ describe('getKitchenOrders controller', () => {
 
     expect(assertStoreActive).toHaveBeenCalledWith('store-1');
     expect(res.statusCode).toBe(200);
-    expect(listKitchenOrders).toHaveBeenCalledWith(2, 50, 'admin', {
+    expect(listKitchenOrders).toHaveBeenCalledWith(2, 50, 'superAdmin', {
       createdFrom: expect.any(Date),
       createdTo: expect.any(Date),
       id: 'abc-123',
@@ -110,7 +110,7 @@ describe('getKitchenOrders controller', () => {
     assertStoreActive.mockRejectedValue(new StoreNotFoundError());
     const req = {
       query: { storeId: 'inactive-store' },
-      userType: 'admin',
+      userType: 'superAdmin',
     } as unknown as AuthRequest;
     const res = mockRes();
 

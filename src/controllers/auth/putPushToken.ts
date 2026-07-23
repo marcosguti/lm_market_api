@@ -2,6 +2,7 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { upsertPushDevice } from '../../services/pushDeviceService.js';
 import { putPushTokenSchema } from './schemas.js';
 
@@ -13,7 +14,7 @@ export async function putPushToken(req: AuthRequest, res: Response): Promise<voi
 
   const validation = putPushTokenSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
 

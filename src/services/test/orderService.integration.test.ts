@@ -50,6 +50,10 @@ vi.mock('../../libs/fcm/index.js', () => ({
   sendPushToUser: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock('../../libs/sendEmail/index.js', () => ({
+  sendNewOrderForAdminEmail: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../../config/megasoft.js', () => ({
   megasoftConfig: {
     amountOverride: null,
@@ -94,6 +98,9 @@ vi.mock('../../prisma.js', () => ({
       findUnique: (...args: unknown[]) => txMocks.paymentMethodConfig.findUnique(...args),
     },
     product: { findMany: vi.fn() },
+    user: {
+      findMany: vi.fn().mockResolvedValue([]),
+    },
   },
 }));
 
@@ -116,6 +123,7 @@ import {
   markNotificationAsRead,
   markOrderDelivered,
   notifyOrderPaid,
+  notifyStoreAdminsNewOrderEmail,
   OrderDomainError,
   startOrderDelivering,
   unassignOrderFromDelivery,
@@ -1467,7 +1475,7 @@ describe('orderService async flows', () => {
         paymentMethod: null,
         paymentReference: null,
         paymentScreenshotUrl: null,
-        storeId: null,
+        storeId: 'store-1',
         version: 1,
       };
 
@@ -1480,6 +1488,111 @@ describe('orderService async flows', () => {
       );
       expect(socket.emitOrderUpdated).toHaveBeenCalled();
       expect(socket.emitKitchenNewPaid).toHaveBeenCalledWith(order);
+      expect(prisma.user.findMany).toHaveBeenCalledWith({
+        select: { email: true, firstName: true },
+        where: { storeId: 'store-1', type: 'admin' },
+      });
+    });
+  });
+
+  describe('notifyStoreAdminsNewOrderEmail', () => {
+    it('sends email to each store admin for paymentConfirmed', async () => {
+      const prisma = (await import('../../prisma.js')).default;
+      const { sendNewOrderForAdminEmail } = await import('../../libs/sendEmail/index.js');
+      vi.mocked(prisma.user.findMany).mockResolvedValue([
+        { email: 'a1@store.com', firstName: 'Ana' },
+        { email: 'a2@store.com', firstName: 'Luis' },
+      ] as never);
+
+      await notifyStoreAdminsNewOrderEmail({
+        id: 'a5350180-1234-5678-9abc-def012345678',
+        status: 'paymentConfirmed',
+        storeId: 'store-1',
+      });
+
+      expect(sendNewOrderForAdminEmail).toHaveBeenCalledTimes(2);
+      expect(sendNewOrderForAdminEmail).toHaveBeenCalledWith({
+        email: 'a1@store.com',
+        firstName: 'Ana',
+        shortOrderId: '#a5350180',
+        statusLabel: 'Pago Confirmado',
+      });
+      expect(sendNewOrderForAdminEmail).toHaveBeenCalledWith({
+        email: 'a2@store.com',
+        firstName: 'Luis',
+        shortOrderId: '#a5350180',
+        statusLabel: 'Pago Confirmado',
+      });
+    });
+
+    it('sends email for paymentPendingConfirmation', async () => {
+      const prisma = (await import('../../prisma.js')).default;
+      const { sendNewOrderForAdminEmail } = await import('../../libs/sendEmail/index.js');
+      vi.mocked(prisma.user.findMany).mockResolvedValue([
+        { email: 'admin@store.com', firstName: 'Ana' },
+      ] as never);
+
+      await notifyStoreAdminsNewOrderEmail({
+        id: 'b1111111-aaaa-bbbb-cccc-ddddeeeeffff',
+        status: 'paymentPendingConfirmation',
+        storeId: 'store-1',
+      });
+
+      expect(sendNewOrderForAdminEmail).toHaveBeenCalledWith({
+        email: 'admin@store.com',
+        firstName: 'Ana',
+        shortOrderId: '#b1111111',
+        statusLabel: 'Pago por confirmar',
+      });
+    });
+
+    it('does not send for other statuses', async () => {
+      const prisma = (await import('../../prisma.js')).default;
+      const { sendNewOrderForAdminEmail } = await import('../../libs/sendEmail/index.js');
+
+      await notifyStoreAdminsNewOrderEmail({
+        id: 'o1',
+        status: 'preparing',
+        storeId: 'store-1',
+      });
+
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+      expect(sendNewOrderForAdminEmail).not.toHaveBeenCalled();
+    });
+
+    it('does not send when storeId is missing', async () => {
+      const prisma = (await import('../../prisma.js')).default;
+      const { sendNewOrderForAdminEmail } = await import('../../libs/sendEmail/index.js');
+
+      await notifyStoreAdminsNewOrderEmail({
+        id: 'o1',
+        status: 'paymentConfirmed',
+        storeId: null,
+      });
+
+      expect(prisma.user.findMany).not.toHaveBeenCalled();
+      expect(sendNewOrderForAdminEmail).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when mailjet fails', async () => {
+      const prisma = (await import('../../prisma.js')).default;
+      const { sendNewOrderForAdminEmail } = await import('../../libs/sendEmail/index.js');
+      vi.mocked(prisma.user.findMany).mockResolvedValue([
+        { email: 'admin@store.com', firstName: 'Ana' },
+      ] as never);
+      vi.mocked(sendNewOrderForAdminEmail).mockRejectedValueOnce(new Error('mailjet down'));
+      const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(
+        notifyStoreAdminsNewOrderEmail({
+          id: 'o1',
+          status: 'paymentConfirmed',
+          storeId: 'store-1',
+        }),
+      ).resolves.toBeUndefined();
+
+      expect(consoleSpy).toHaveBeenCalled();
+      consoleSpy.mockRestore();
     });
   });
 

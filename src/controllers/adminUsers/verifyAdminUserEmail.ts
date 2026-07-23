@@ -22,7 +22,7 @@ export async function verifyAdminUserEmail(req: AuthRequest, res: Response): Pro
     return;
   }
   if (existing.emailVerified) {
-    res.status(400).json({ error: 'El email ya está verificado' });
+    res.status(400).json({ error: 'El correo ya está verificado' });
     return;
   }
 

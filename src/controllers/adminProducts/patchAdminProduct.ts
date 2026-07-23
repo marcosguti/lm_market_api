@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import type { AuthRequest } from '../../middlewares/auth.js';
 
 import { deleteFile, uploadFile } from '../../libs/filesInDigitalOcean/index.js';
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import {
   findOrCreateBrand,
   findOrCreateDepartment,
@@ -21,7 +22,7 @@ export async function patchAdminProduct(req: AuthRequest, res: Response): Promis
     normalizeAdminProductMultipartBody(req.body as Record<string, unknown>),
   );
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   const id = typeof req.params.id === 'string' ? req.params.id : req.params.id?.[0];

@@ -2,6 +2,7 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { findUserByPhone, updateUser } from '../../queries/user.js';
 import { updateProfileSchema } from './schemas.js';
 import { serializeAuthUser } from './serializeAuthUser.js';
@@ -13,7 +14,7 @@ export async function updateProfile(req: AuthRequest, res: Response): Promise<vo
   }
   const validation = updateProfileSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   const body = validation.value;

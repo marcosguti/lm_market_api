@@ -3,6 +3,7 @@ import type { Response } from 'express';
 
 import type { AuthRequest } from '../../middlewares/auth.js';
 
+import { joiValidationErrorMessage } from '../../libs/joiTranslate.js';
 import { assertAdminCanManageUser, StoreScopeError } from '../../middlewares/storeScope.js';
 import { assertStoreActive, StoreNotFoundError } from '../../queries/store.js';
 import {
@@ -18,7 +19,7 @@ import { isPrismaUniqueError, serializeUser } from './userUtils.js';
 export async function patchAdminUser(req: AuthRequest, res: Response): Promise<void> {
   const validation = patchSchema.validate(req.body);
   if (validation.error) {
-    res.status(400).json({ error: validation.error.message });
+    res.status(400).json({ error: joiValidationErrorMessage(validation.error) });
     return;
   }
   const id = typeof req.params['id'] === 'string' ? req.params['id'] : req.params['id']?.[0];
@@ -76,7 +77,7 @@ export async function patchAdminUser(req: AuthRequest, res: Response): Promise<v
   }
 
   if (needsStore(nextType) && !nextStoreId) {
-    res.status(400).json({ error: '"storeId" is required' });
+    res.status(400).json({ error: 'La sede es requerida' });
     return;
   }
 
@@ -95,7 +96,7 @@ export async function patchAdminUser(req: AuthRequest, res: Response): Promise<v
   if (body.email !== undefined && body.email !== existing.email) {
     const clash = await findUserByEmail(body.email);
     if (clash && clash.id !== id) {
-      res.status(409).json({ error: 'Email ya registrado' });
+      res.status(409).json({ error: 'Correo ya registrado' });
       return;
     }
   }
@@ -133,7 +134,7 @@ export async function patchAdminUser(req: AuthRequest, res: Response): Promise<v
     res.json({ user: serializeUser(user) });
   } catch (err) {
     if (isPrismaUniqueError(err)) {
-      res.status(409).json({ error: 'El email, la cédula o el teléfono ya existe' });
+      res.status(409).json({ error: 'El correo, la cédula o el teléfono ya existe' });
       return;
     }
     throw err;
